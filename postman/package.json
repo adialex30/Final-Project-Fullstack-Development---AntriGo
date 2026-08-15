@@ -1,0 +1,15 @@
+{
+  "name": "antrigo-postman-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Automation testing (Newman) untuk AntriGo API",
+  "scripts": {
+    "test:local": "newman run AntriGo.postman_collection.json -e AntriGo.postman_environment.json --delay-request 150 --reporters cli,htmlextra --reporter-htmlextra-export newman/report.html",
+    "test:ci": "newman run AntriGo.postman_collection.json -e AntriGo.postman_environment.json --delay-request 100 --reporters cli,junit --reporter-junit-export newman/junit-report.xml",
+    "test:folder:setup": "newman run AntriGo.postman_collection.json -e AntriGo.postman_environment.json --folder \"0. Setup\""
+  },
+  "devDependencies": {
+    "newman": "^6.2.1",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}

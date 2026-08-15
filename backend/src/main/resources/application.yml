@@ -1,0 +1,138 @@
+#spring:
+#  application:
+#    name: antrigo-backend
+#  profiles:
+#    active: ${SPRING_PROFILES_ACTIVE:local}
+#  datasource:
+#    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:antrigo}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Jakarta
+#    username: ${DB_USER:root}
+#    password: ${DB_PASSWORD:antrigo123}
+#    hikari:
+#      maximum-pool-size: 10
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate
+#    open-in-view: false
+#    properties:
+#      hibernate:
+#        format_sql: false
+#        jdbc:
+#          time_zone: Asia/Jakarta
+#  flyway:
+#    enabled: true
+#    locations: classpath:db/migration
+#    baseline-on-migrate: true
+#  data:
+#    redis:
+#      # Menggunakan 'localhost' sebagai default jika REDIS_HOST tidak diisi
+#      host: ${REDIS_HOST:localhost}
+#      port: ${REDIS_PORT:6379}
+#  cache:
+#    type: redis
+#    redis:
+#      time-to-live: 60000
+#
+#server:
+#  port: 8081
+#  error:
+#    include-message: always
+#
+#app:
+#  jwt:
+#    secret: ${JWT_SECRET:antrigo-super-secret-key-change-in-production-min-256-bits-long}
+#    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+#  cors:
+#    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+#  queue:
+#    avg-prep-time-minutes: ${AVG_PREP_MINUTES:4}
+#  rate-limit:
+#    checkout-per-minute: ${CHECKOUT_RATE_LIMIT:20}
+#
+#springdoc:
+#  swagger-ui:
+#    path: /swagger-ui.html
+#  api-docs:
+#    path: /v3/api-docs
+#
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: health,info
+#  endpoint:
+#    health:
+#      show-details: never
+#
+#logging:
+#  level:
+#    com.antrigo: INFO
+#    org.hibernate.SQL: WARN
+
+spring:
+  application:
+    name: antrigo-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:antrigo}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Jakarta
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:antrigo123}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: Asia/Jakarta
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60000
+
+server:
+  port: 8081
+  error:
+    include-message: always
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:antrigo-super-secret-key-change-in-production-min-256-bits-long}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  queue:
+    avg-prep-time-minutes: ${AVG_PREP_MINUTES:4}
+  rate-limit:
+    checkout-per-minute: ${CHECKOUT_RATE_LIMIT:20}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.antrigo: INFO
+    org.hibernate.SQL: WARN

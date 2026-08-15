@@ -1,0 +1,96 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: antrigo-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-antrigo}
+      MYSQL_USER: ${DB_USER:-antrigo}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-antrigo123}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root12345}
+    ports:
+      - "3306:3306"
+    volumes:
+      - antrigo-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root12345}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - antrigo-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: antrigo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - antrigo-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: antrigo-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-antrigo}
+      DB_USER: ${DB_USER:-antrigo}
+      DB_PASSWORD: ${DB_PASSWORD:-antrigo123}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-antrigo-super-secret-key-change-in-production-min-256-bits-long}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      AVG_PREP_MINUTES: ${AVG_PREP_MINUTES:-4}
+      CHECKOUT_RATE_LIMIT: ${CHECKOUT_RATE_LIMIT:-20}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    networks:
+      - antrigo-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+    container_name: antrigo-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    networks:
+      - antrigo-net
+
+networks:
+  antrigo-net:
+    driver: bridge
+
+volumes:
+  antrigo-mysql-data:

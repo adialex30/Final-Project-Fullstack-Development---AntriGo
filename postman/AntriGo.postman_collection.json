@@ -1,0 +1,1859 @@
+{
+  "info": {
+    "name": "AntriGo API",
+    "description": "Automation testing untuk AntriGo — Self-Order & Antrean Digital UMKM. Jalankan folder secara berurutan (0 -> 7) karena request saling bergantung lewat environment variable (chaining). Lihat postman/README.md untuk instruksi Newman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "a4e1f6b0-a1a1-4e0a-9c1a-antrigo0000001"
+  },
+  "item": [
+    {
+      "name": "0. Setup",
+      "item": [
+        {
+          "name": "Backend Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/../actuator/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "..",
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Memastikan backend + koneksi MySQL/Redis siap sebelum test lain dijalankan."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login admin default dari seed data, token disimpan ke variable admin_token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Token diterima', () => pm.expect(data.token).to.be.a('string').and.not.empty);",
+                  "pm.environment.set('admin_token', data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve Seeded Product IDs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?size=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Mencari id produk seed by name secara dinamis (bukan hardcode id) supaya collection tetap jalan walau urutan seed berubah."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().content;",
+                  "const byName = (n) => items.find(p => p.name === n);",
+                  "const nasiGoreng = byName('Nasi Goreng Spesial');",
+                  "const esTeh = byName('Es Teh Manis');",
+                  "const soto = byName('Soto Ayam Lamongan');",
+                  "pm.test('Produk seed ditemukan', () => {",
+                  "  pm.expect(nasiGoreng, 'Nasi Goreng Spesial').to.exist;",
+                  "  pm.expect(esTeh, 'Es Teh Manis').to.exist;",
+                  "  pm.expect(soto, 'Soto Ayam Lamongan').to.exist;",
+                  "});",
+                  "if (nasiGoreng) pm.environment.set('nasi_goreng_id', nasiGoreng.id);",
+                  "if (esTeh) pm.environment.set('es_teh_id', esTeh.id);",
+                  "if (soto) pm.environment.set('soto_id', soto.id);",
+                  "if (soto) pm.environment.set('soto_stock', soto.stock);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resolve Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const cats = pm.response.json();",
+                  "pm.test('Minimal 1 kategori', () => pm.expect(cats.length).to.be.above(0));",
+                  "const makanan = cats.find(c => c.name === 'Makanan Utama');",
+                  "if (makanan) pm.environment.set('category_id', makanan.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Health check, login admin, dan resolusi id produk/kategori dari seed data."
+    },
+    {
+      "name": "1. Public Catalog",
+      "item": [
+        {
+          "name": "List Categories (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response adalah array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Products (Pagination)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?page=0&size=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Struktur PageResponse valid', () => {",
+                  "  pm.expect(data).to.have.property('content');",
+                  "  pm.expect(data).to.have.property('totalElements');",
+                  "  pm.expect(data).to.have.property('totalPages');",
+                  "});",
+                  "pm.test('Ukuran halaman dihormati', () => pm.expect(data.content.length).to.be.at.most(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Products by Keyword",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?search=nasi",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "nasi"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Semua hasil mengandung kata kunci', () => {",
+                  "  data.content.forEach(p => pm.expect(p.name.toLowerCase()).to.include('nasi'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter Products by Category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products?category={{category_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "{{category_id}}"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test('Semua produk sesuai kategori', () => {",
+                  "  data.content.forEach(p => pm.expect(String(p.categoryId)).to.eql(pm.environment.get('category_id')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/{{nasi_goreng_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "{{nasi_goreng_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test('Nama produk sesuai', () => pm.expect(p.name).to.eql('Nasi Goreng Spesial'));",
+                  "pm.test('Harga tidak pernah 0 atau negatif', () => pm.expect(p.price).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Product Detail - Not Found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/999999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "999999"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Format error konsisten', () => {",
+                  "  const err = pm.response.json();",
+                  "  pm.expect(err).to.have.property('status', 404);",
+                  "  pm.expect(err).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Endpoint publik tanpa login — katalog & pencarian menu."
+    },
+    {
+      "name": "2. Admin - Product & Category Management",
+      "item": [
+        {
+          "name": "Create Category (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "categories"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Paket Hemat\",\n  \"sortOrder\": 9\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const cat = pm.response.json();",
+                  "pm.test('Slug ter-generate', () => pm.expect(cat.slug).to.eql('paket-hemat'));",
+                  "pm.environment.set('new_category_id', cat.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{new_category_id}}\",\n  \"name\": \"Paket Hemat Nasi + Es Teh\",\n  \"description\": \"Kombo hemat untuk automation test\",\n  \"price\": 25000,\n  \"stock\": 15,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const p = pm.response.json();",
+                  "pm.test('Stok awal sesuai payload', () => pm.expect(p.stock).to.eql(15));",
+                  "pm.environment.set('new_product_id', p.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product Without Token - Expect 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            },
+            "description": "Tanpa Authorization header, endpoint admin harus menolak dengan 401.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{new_category_id}}\",\n  \"name\": \"Produk Ilegal\",\n  \"price\": 1000,\n  \"stock\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401 (unauthenticated)', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Product (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{new_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{new_product_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{new_category_id}}\",\n  \"name\": \"Paket Hemat Nasi + Es Teh (Update)\",\n  \"description\": \"Harga diperbarui oleh automation test\",\n  \"price\": 27000,\n  \"stock\": 15,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test('Harga terbarui', () => pm.expect(p.price).to.eql(27000));",
+                  "pm.test('Nama terbarui', () => pm.expect(p.name).to.include('Update'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product With Invalid Payload - Expect 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products"
+              ]
+            },
+            "description": "Nama kosong, harga & stok negatif harus ditolak oleh @Valid di ProductRequest.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{new_category_id}}\",\n  \"name\": \"\",\n  \"price\": -100,\n  \"stock\": -5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "const err = pm.response.json();",
+                  "pm.test('fieldErrors berisi detail validasi', () => pm.expect(err.fieldErrors).to.be.an('object'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Staff Account (Admin only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Staff Automation Test\",\n  \"email\": \"staff.qa+{{$timestamp}}@antrigo.id\",\n  \"password\": \"StaffPass123\",\n  \"role\": \"STAFF\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();",
+                  "pm.test('Role staff sesuai', () => pm.expect(data.role).to.eql('STAFF'));",
+                  "pm.environment.set('staff_token', data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Staff Attempts Delete Product - Expect 403",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{staff_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/products/{{new_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "products",
+                "{{new_product_id}}"
+              ]
+            },
+            "description": "Endpoint delete/deactivate product dibatasi @PreAuthorize hasRole('ADMIN') — STAFF harus ditolak."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403 (role STAFF tidak berhak)', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "CRUD produk/kategori serta validasi RBAC (401/403)."
+    },
+    {
+      "name": "3. Admin - Stock Management",
+      "item": [
+        {
+          "name": "Adjust Stock - Restock (+20)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/stock/{{new_product_id}}/adjust",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "stock",
+                "{{new_product_id}}",
+                "adjust"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantityChange\": 20,\n  \"note\": \"Restock dari automation test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Stock After Restock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/{{new_product_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "{{new_product_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test('Stok bertambah 20 (15 -> 35)', () => pm.expect(p.stock).to.eql(35));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Adjust Stock - Over-deduct - Expect 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/stock/{{new_product_id}}/adjust",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "stock",
+                "{{new_product_id}}",
+                "adjust"
+              ]
+            },
+            "description": "Penyesuaian stok yang membuat stok menjadi negatif harus ditolak (InsufficientStockException -> 422).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantityChange\": -9999,\n  \"note\": \"Percobaan membuat stok negatif\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', () => pm.response.to.have.status(422));",
+                  "const err = pm.response.json();",
+                  "pm.test('Pesan error relevan', () => pm.expect(err.message.toLowerCase()).to.include('negatif'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Low Stock Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/reports/low-stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "reports",
+                "low-stock"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json();",
+                  "pm.test('Response adalah array', () => pm.expect(items).to.be.an('array'));",
+                  "pm.test('Soto Ayam Lamongan (stock=1) termasuk stok rendah', () => {",
+                  "  const soto = items.find(i => i.productId == pm.environment.get('soto_id'));",
+                  "  pm.expect(soto, 'Soto Ayam Lamongan harus ada di low-stock report').to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Penyesuaian stok manual sebagai ledger, termasuk validasi stok negatif (422)."
+    },
+    {
+      "name": "4. Customer - Checkout Flow (Happy Path)",
+      "item": [
+        {
+          "name": "Snapshot Nasi Goreng Stock (Before Checkout)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/{{nasi_goreng_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "{{nasi_goreng_id}}"
+              ]
+            },
+            "description": "Baseline stok diambil langsung sebelum checkout — supaya assertion di request berikutnya tidak bergantung pada angka seed absolut (aman dijalankan baik di database kosong maupun yang sudah diisi DemoDataSeeder)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.environment.set('nasi_goreng_stock_before', p.stock);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout - Happy Path (QRIS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "Payload checkout hanya berisi productId/variantId/quantity/note — harga dihitung ulang di server, dites lewat totalAmount yang deterministik.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableNumber\": \"07\",\n  \"paymentMethod\": \"QRIS\",\n  \"note\": \"Automation test order\",\n  \"items\": [\n    {\n      \"productId\": \"{{nasi_goreng_id}}\",\n      \"quantity\": 2,\n      \"note\": \"tidak pedas\"\n    },\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('Nomor antrean & order number diterbitkan', () => {",
+                  "  pm.expect(order.orderNumber).to.be.a('string');",
+                  "  pm.expect(order.queueNumber).to.be.a('number');",
+                  "});",
+                  "pm.test('Status awal QUEUED', () => pm.expect(order.status).to.eql('QUEUED'));",
+                  "pm.test('Total dihitung ulang di server (tidak dari payload)', () => {",
+                  "  pm.expect(order.totalAmount).to.eql(49000); // 2x22000 + 1x5000, harga seed tidak pernah diubah seeder",
+                  "});",
+                  "pm.environment.set('order_number', order.orderNumber);",
+                  "pm.environment.set('order_queue_number', order.queueNumber);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_number}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_number}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('2 item dalam pesanan', () => pm.expect(order.items.length).to.eql(2));",
+                  "pm.test('Snapshot nama produk tersimpan', () => {",
+                  "  pm.expect(order.items.map(i => i.productName)).to.include('Nasi Goreng Spesial');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Poll Order Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_number}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_number}}",
+                "status"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const status = pm.response.json();",
+                  "pm.test('Estimasi waktu tunggu >= 0', () => pm.expect(status.estimatedWaitMinutes).to.be.at.least(0));",
+                  "pm.test('Nomor antrean konsisten', () => pm.expect(status.queueNumber).to.eql(pm.environment.get('order_queue_number') * 1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Stock Decremented After Checkout",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/{{nasi_goreng_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "{{nasi_goreng_id}}"
+              ]
+            },
+            "description": "Dibandingkan terhadap baseline yang diambil di request 'Snapshot Nasi Goreng Stock', bukan angka seed absolut."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "const before = Number(pm.environment.get('nasi_goreng_stock_before'));",
+                  "pm.test('Stok Nasi Goreng berkurang tepat 2', () => pm.expect(p.stock).to.eql(before - 2));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Alur checkout penuh: harga dihitung ulang di server, nomor antrean terbit, polling status."
+    },
+    {
+      "name": "5. Customer - Negative & Edge Cases",
+      "item": [
+        {
+          "name": "Checkout - Insufficient Stock - Expect 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "Soto Ayam Lamongan sengaja diseed dengan stok sangat rendah (1, bisa 0 kalau DemoDataSeeder sudah menghabiskannya); memesan 5 harus tetap ditolak dan seluruh transaksi rollback (order TIDAK tercipta).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{soto_id}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', () => pm.response.to.have.status(422));",
+                  "const err = pm.response.json();",
+                  "pm.test('Pesan menyebut stok tidak mencukupi', () => pm.expect(err.message.toLowerCase()).to.include('tidak mencukupi'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout - Product Not Found - Expect 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": 999999,\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Checkout - Empty Cart - Expect 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Status - Order Not Found - Expect 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/ORD-NOTFOUND-000000/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "ORD-NOTFOUND-000000",
+                "status"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel Order (Happy Path Order)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_number}}/cancel?reason=Automation test cancellation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_number}}",
+                "cancel"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Automation test cancellation"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Status menjadi CANCELLED', () => pm.expect(order.status).to.eql('CANCELLED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Stock Reversed After Cancel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/products/{{nasi_goreng_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "products",
+                "{{nasi_goreng_id}}"
+              ]
+            },
+            "description": "Dibandingkan terhadap baseline yang sama dari folder 4 — setelah checkout lalu cancel, stok harus balik persis ke titik awal."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "const before = Number(pm.environment.get('nasi_goreng_stock_before'));",
+                  "pm.test('Stok Nasi Goreng kembali ke baseline semula', () => pm.expect(p.stock).to.eql(before));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel Already-Cancelled Order - Expect 409",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/orders/{{order_number}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders",
+                "{{order_number}}",
+                "cancel"
+              ]
+            },
+            "description": "CANCELLED tidak punya transisi keluar apapun — mencoba cancel lagi harus ditolak 409."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 (transisi tidak valid)', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Stok tidak cukup (422), produk tidak ada (404), pembatalan & transisi status invalid (409)."
+    },
+    {
+      "name": "6. Admin - Kitchen Board & Status Transitions",
+      "item": [
+        {
+          "name": "Checkout - Order For Board Testing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tableNumber\": \"15\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 3\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.environment.set('board_order_number', order.orderNumber);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Kitchen Board Without Token - Expect 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/board",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "board"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Kitchen Board (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/board",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "board"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const board = pm.response.json();",
+                  "pm.test('Pesanan board test ada di papan dapur', () => {",
+                  "  const found = board.find(o => o.orderNumber === pm.environment.get('board_order_number'));",
+                  "  pm.expect(found, 'order harus tampil di board').to.exist;",
+                  "});",
+                  "pm.test('Papan terurut menurut nomor antrean', () => {",
+                  "  const numbers = board.map(o => o.queueNumber);",
+                  "  const sorted = [...numbers].sort((a,b) => a-b);",
+                  "  pm.expect(numbers).to.eql(sorted);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status: QUEUED -> PROCESSING",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{board_order_number}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{board_order_number}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\",\n  \"note\": \"Dapur mulai memasak\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status berubah ke PROCESSING', () => pm.expect(pm.response.json().status).to.eql('PROCESSING'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status: PROCESSING -> READY",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{board_order_number}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{board_order_number}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READY\",\n  \"note\": \"Pesanan siap diambil\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status berubah ke READY', () => pm.expect(pm.response.json().status).to.eql('READY'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Transition: READY -> QUEUED - Expect 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{board_order_number}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{board_order_number}}",
+                "status"
+              ]
+            },
+            "description": "READY hanya boleh lanjut ke COMPLETED — mundur ke QUEUED harus ditolak.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"QUEUED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "const err = pm.response.json();",
+                  "pm.test('Pesan menjelaskan transisi tidak valid', () => pm.expect(err.message).to.include('READY'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Status: READY -> COMPLETED",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{board_order_number}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{board_order_number}}",
+                "status"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"COMPLETED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status berubah ke COMPLETED', () => pm.expect(pm.response.json().status).to.eql('COMPLETED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm Cash Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/orders/{{board_order_number}}/payment/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "orders",
+                "{{board_order_number}}",
+                "payment",
+                "confirm"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Papan dapur, RBAC, dan validasi state machine status pesanan."
+    },
+    {
+      "name": "7. Admin - Reports",
+      "item": [
+        {
+          "name": "Dashboard Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/reports/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "reports",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const report = pm.response.json();",
+                  "pm.test('Struktur laporan lengkap', () => {",
+                  "  pm.expect(report).to.have.property('revenueToday');",
+                  "  pm.expect(report).to.have.property('topProducts').that.is.an('array');",
+                  "  pm.expect(report).to.have.property('lowStockProducts').that.is.an('array');",
+                  "  pm.expect(report).to.have.property('busiestHours').that.is.an('array');",
+                  "});",
+                  "pm.test('Pendapatan hari ini bukan negatif', () => pm.expect(report.revenueToday).to.be.at.least(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard Report Without Token - Expect 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/reports/dashboard",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "reports",
+                "dashboard"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Laporan otomatis: pendapatan, produk terlaris, stok rendah, jam tersibuk."
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global guard: pastikan base_url environment sudah dipilih.",
+          "if (!pm.environment.get('base_url')) {",
+          "  console.warn('base_url belum diset — pilih environment AntriGo Local terlebih dahulu.');",
+          "}"
+        ]
+      }
+    }
+  ]
+}
