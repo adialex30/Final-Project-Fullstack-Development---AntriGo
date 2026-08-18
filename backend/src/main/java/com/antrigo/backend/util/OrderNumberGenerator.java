@@ -4,7 +4,6 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
-/** Opaque order reference generator — tidak sekuensial, tidak menebak jumlah order kompetitor. */
 public final class OrderNumberGenerator {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");

@@ -31,7 +31,6 @@ public class OrderItem {
     @JoinColumn(name = "variant_id")
     private ProductVariant variant;
 
-    /** Snapshot — perubahan menu di kemudian hari tidak mengubah riwayat struk. */
     @Column(name = "product_name_snapshot", nullable = false, length = 160)
     private String productNameSnapshot;
 

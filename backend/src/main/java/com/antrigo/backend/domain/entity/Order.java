@@ -29,11 +29,17 @@ public class Order {
     @Column(name = "business_date", nullable = false)
     private LocalDate businessDate;
 
-    @Column(name = "queue_number", nullable = false)
-    private int queueNumber;
+    @Column(name = "queue_number")
+    private Integer queueNumber;
 
     @Column(name = "table_number", length = 20)
     private String tableNumber;
+
+    @Column(name = "customer_name", nullable = false, length = 100)
+    private String customerName;
+
+    @Column(name = "customer_phone", nullable = false, length = 20)
+    private String customerPhone;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

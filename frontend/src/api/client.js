@@ -23,7 +23,6 @@ apiClient.interceptors.response.use(
   }
 )
 
-/** Ekstrak pesan error dari format ApiError backend (GlobalExceptionHandler). */
 export function extractErrorMessage(error, fallback = 'Terjadi kesalahan, coba lagi') {
   return error?.response?.data?.message || fallback
 }

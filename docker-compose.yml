@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.0
@@ -62,6 +60,10 @@ services:
       AVG_PREP_MINUTES: ${AVG_PREP_MINUTES:-4}
       CHECKOUT_RATE_LIMIT: ${CHECKOUT_RATE_LIMIT:-20}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      MIDTRANS_MERCHANT_ID: ${MIDTRANS_MERCHANT_ID:-}
+      MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY:-}
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-}
+      MIDTRANS_SANDBOX: ${MIDTRANS_SANDBOX:-true}
     ports:
       - "8080:8080"
     healthcheck:

@@ -981,7 +981,7 @@
             "description": "Payload checkout hanya berisi productId/variantId/quantity/note — harga dihitung ulang di server, dites lewat totalAmount yang deterministik.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tableNumber\": \"07\",\n  \"paymentMethod\": \"QRIS\",\n  \"note\": \"Automation test order\",\n  \"items\": [\n    {\n      \"productId\": \"{{nasi_goreng_id}}\",\n      \"quantity\": 2,\n      \"note\": \"tidak pedas\"\n    },\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"tableNumber\": \"07\",\n  \"customerName\": \"Budi Tester\",\n  \"customerPhone\": \"081234567890\",\n  \"paymentMethod\": \"QRIS\",\n  \"note\": \"Automation test order\",\n  \"items\": [\n    {\n      \"productId\": \"{{nasi_goreng_id}}\",\n      \"quantity\": 2,\n      \"note\": \"tidak pedas\"\n    },\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1143,7 +1143,7 @@
             "description": "Soto Ayam Lamongan sengaja diseed dengan stok sangat rendah (1, bisa 0 kalau DemoDataSeeder sudah menghabiskannya); memesan 5 harus tetap ditolak dan seluruh transaksi rollback (order TIDAK tercipta).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{soto_id}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"customerName\": \"Budi Tester\",\n  \"customerPhone\": \"081234567890\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{soto_id}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1188,7 +1188,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": 999999,\n      \"quantity\": 1\n    }\n  ]\n}",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"customerName\": \"Budi Tester\",\n  \"customerPhone\": \"081234567890\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": 999999,\n      \"quantity\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1231,7 +1231,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tableNumber\": \"12\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": []\n}",
+              "raw": "{\n  \"tableNumber\": \"12\",\n  \"customerName\": \"Budi Tester\",\n  \"customerPhone\": \"081234567890\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": []\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1414,7 +1414,7 @@
             "description": "",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tableNumber\": \"15\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 3\n    }\n  ]\n}",
+              "raw": "{\n  \"tableNumber\": \"15\",\n  \"customerName\": \"Budi Tester\",\n  \"customerPhone\": \"081234567890\",\n  \"paymentMethod\": \"CASH\",\n  \"items\": [\n    {\n      \"productId\": \"{{es_teh_id}}\",\n      \"quantity\": 3\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

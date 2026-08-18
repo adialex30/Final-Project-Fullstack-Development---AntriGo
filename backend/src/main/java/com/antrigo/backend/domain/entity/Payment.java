@@ -40,6 +40,15 @@ public class Payment {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @Column(name = "gateway_transaction_id", length = 64)
+    private String gatewayTransactionId;
+
+    @Column(name = "qr_payload", columnDefinition = "TEXT")
+    private String qrPayload;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

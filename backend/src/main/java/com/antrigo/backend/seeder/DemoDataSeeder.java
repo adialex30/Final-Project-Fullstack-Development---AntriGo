@@ -23,22 +23,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 
-/**
- * DemoDataSeeder — mengisi riwayat transaksi realistis (bukan cuma katalog) supaya dashboard,
- * laporan, dan papan dapur langsung terlihat "hidup" tanpa perlu klik-klik manual dulu.
- *
- * Nonaktif secara default (app.seed.demo-data=false). Aktifkan lewat env var SEED_DEMO_DATA=true
- * (docker-compose sudah menyalakannya secara default) atau flag --app.seed.demo-data=true.
- *
- * Idempoten: kalau tabel orders sudah berisi data, seeder langsung berhenti — aman dijalankan
- * berkali-kali (mis. tiap restart container) tanpa duplikasi.
- *
- * Yang sengaja TIDAK dilakukan seeder ini: membuat kategori/produk baru. Katalog dasar sudah
- * jadi tanggung jawab Flyway V2__seed_data.sql — seeder ini murni membangun 10 hari riwayat
- * transaksi (order, order_items, payments, order_status_logs, stock_movements) di atas katalog
- * yang sudah ada, dengan mekanisme yang sama seperti checkout sungguhan (harga snapshot, ledger
- * stok, audit trail status) supaya datanya konsisten dengan aturan bisnis aplikasi.
- */
 @Component
 @ConditionalOnProperty(name = "app.seed.demo-data", havingValue = "true")
 @RequiredArgsConstructor
@@ -46,8 +30,8 @@ import java.util.*;
 public class DemoDataSeeder implements CommandLineRunner {
 
     private static final ZoneId STORE_ZONE = ZoneId.of("Asia/Jakarta");
-    private static final int HISTORY_DAYS = 10; // termasuk hari ini
-    private static final Random RANDOM = new Random(42); // seed tetap -> hasil reproducible
+    private static final int HISTORY_DAYS = 10;
+    private static final Random RANDOM = new Random(42);
 
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
@@ -109,7 +93,7 @@ public class DemoDataSeeder implements CommandLineRunner {
             for (int i = 0; i < timeSlots.size(); i++) {
                 List<OrderItemDraft> lines = buildLines(products, stockPool);
                 if (lines.isEmpty()) {
-                    break; // stok sudah habis untuk semua produk hari ini
+                    break;
                 }
 
                 LocalDateTime createdAt = businessDate.atTime(timeSlots.get(i)[0], timeSlots.get(i)[1]);
@@ -163,7 +147,6 @@ public class DemoDataSeeder implements CommandLineRunner {
                     patches.add(new TimestampPatch("order_items", "created_at", item.getId(), createdAt));
                 }
 
-                // --- Ledger stok: OUT saat checkout, REVERSAL kalau dibatalkan ---
                 LocalDateTime movementTime = createdAt;
                 for (OrderItemDraft d : lines) {
                     StockMovement out = stockMovementRepository.save(StockMovement.builder()
@@ -187,12 +170,10 @@ public class DemoDataSeeder implements CommandLineRunner {
                                 .note("Pembatalan " + savedOrder.getOrderNumber())
                                 .build());
                         patches.add(new TimestampPatch("stock_movements", "created_at", reversal.getId(), reversalTime));
-                        // stok dikembalikan -> net effect terhadap stockPool nol
                         stockPool.merge(d.product().getId(), d.quantity(), Integer::sum);
                     }
                 }
 
-                // --- Audit trail status ---
                 String prev = null;
                 LocalDateTime logTime = createdAt;
                 for (OrderStatus step : statusChainFor(finalStatus)) {
@@ -209,7 +190,6 @@ public class DemoDataSeeder implements CommandLineRunner {
                     logTime = logTime.plusMinutes(2 + RANDOM.nextInt(4));
                 }
 
-                // --- Pembayaran ---
                 PaymentMethod method = RANDOM.nextBoolean() ? PaymentMethod.QRIS : PaymentMethod.CASH;
                 PaymentStatus paymentStatus;
                 LocalDateTime paidAt = null;
@@ -219,7 +199,6 @@ public class DemoDataSeeder implements CommandLineRunner {
                     paymentStatus = PaymentStatus.PAID;
                     paidAt = createdAt;
                 } else {
-                    // CASH: pesanan yang masih QUEUED hari ini mensimulasikan belum dikonfirmasi kasir
                     boolean unconfirmed = finalStatus == OrderStatus.QUEUED && RANDOM.nextBoolean();
                     paymentStatus = unconfirmed ? PaymentStatus.PENDING : PaymentStatus.PAID;
                     paidAt = unconfirmed ? null : createdAt.plusMinutes(1);
@@ -253,11 +232,8 @@ public class DemoDataSeeder implements CommandLineRunner {
                 totalOrders, HISTORY_DAYS, totalCancelled);
     }
 
-    // ---- helpers ----
-
     private record OrderItemDraft(Product product, ProductVariant variant, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {}
 
-    /** Jam ramai warung dibobotkan: makan siang (11-14) dan makan malam (17-20) lebih sering. */
     private int weightedHour() {
         int roll = RANDOM.nextInt(100);
         if (roll < 45) return 11 + RANDOM.nextInt(4);
@@ -265,11 +241,6 @@ public class DemoDataSeeder implements CommandLineRunner {
         return 8 + RANDOM.nextInt(13);
     }
 
-    /**
-     * Untuk hari-hari lampau: mayoritas COMPLETED, sebagian kecil CANCELLED.
-     * Untuk hari ini: pesanan lebih awal (queue kecil) sudah lebih maju statusnya,
-     * pesanan terbaru masih di awal antrean — mensimulasikan dapur yang sedang berjalan.
-     */
     private OrderStatus pickStatus(boolean isToday, int index, int totalToday) {
         if (!isToday) {
             return RANDOM.nextInt(100) < 6 ? OrderStatus.CANCELLED : OrderStatus.COMPLETED;
@@ -293,10 +264,10 @@ public class DemoDataSeeder implements CommandLineRunner {
             case READY -> List.of(OrderStatus.QUEUED, OrderStatus.PROCESSING, OrderStatus.READY);
             case COMPLETED -> List.of(OrderStatus.QUEUED, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.COMPLETED);
             case CANCELLED -> List.of(OrderStatus.QUEUED, OrderStatus.CANCELLED);
+            default -> List.of(OrderStatus.QUEUED); // <-- Tambahkan baris ini untuk mencakup sisa/nilai lain
         };
     }
 
-    /** 1-3 baris keranjang acak, tidak pernah melebihi sisa stok yang sedang dilacak di memori. */
     private List<OrderItemDraft> buildLines(List<Product> products, Map<Long, Integer> stockPool) {
         List<Product> available = new ArrayList<>(products.stream()
                 .filter(p -> stockPool.getOrDefault(p.getId(), 0) > 0)
@@ -331,12 +302,6 @@ public class DemoDataSeeder implements CommandLineRunner {
         return active.get(RANDOM.nextInt(active.size()));
     }
 
-    /**
-     * @PrePersist di entity selalu menimpa createdAt dengan waktu sekarang saat insert — sengaja
-     * begitu supaya perilaku normal aplikasi tidak berubah. Untuk data historis, seeder ini
-     * menimpa ulang kolom timestamp lewat SQL langsung SETELAH entity tersimpan (dan sudah
-     * punya id), tanpa mengubah kode entity sama sekali.
-     */
     private void applyTimestampPatches() {
         for (TimestampPatch p : patches) {
             jdbcTemplate.update(

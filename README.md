@@ -77,11 +77,14 @@ npm run dev
    dalam kunci; jika kurang → `422` dan seluruh transaksi rollback.
 3. **Harga dihitung ulang di server** — payload checkout hanya berisi `productId`, `variantId`,
    `quantity`, `note`. Tidak ada field harga yang diterima dari client.
-4. **Nomor antrean unik per hari** — digenerate di transaksi yang sama dengan checkout, dijamin oleh
-   `UNIQUE (business_date, queue_number)` di database, jadi tidak mungkin ada nomor ganda meski
+4. **Nomor antrean unik per hari** — untuk CASH digenerate langsung saat checkout; untuk QRIS baru
+   digenerate SETELAH pembayaran dikonfirmasi (lihat poin 11). Dijamin oleh
+   `UNIQUE (business_date, queue_number)` di database (nullable-safe — banyak order QRIS yang masih
+   menunggu bayar boleh sama-sama `NULL` tanpa bentrok), jadi tidak mungkin ada nomor ganda meski
    race condition tinggi.
-5. **Stok sebagai ledger** — setiap perubahan stok (checkout, admin adjustment, pembatalan) dicatat
-   di `stock_movements`. Kolom `products.stock` hanya cache yang bisa direkonsiliasi.
+5. **Stok sebagai ledger** — setiap perubahan stok (checkout, admin adjustment, pembatalan, **auto-reset
+   sesi QRIS kedaluwarsa**) dicatat di `stock_movements`. Kolom `products.stock` hanya cache yang bisa
+   direkonsiliasi.
 6. **Snapshot harga & nama di order_items** — perubahan menu di kemudian hari tidak mengubah riwayat
    struk pelanggan lama.
 7. **RBAC** — endpoint admin dilindungi `@PreAuthorize` (role `ADMIN` / `STAFF`), endpoint pelanggan
@@ -89,10 +92,44 @@ npm run dev
 8. **Estimasi waktu tunggu & polling status** — dihitung dari jumlah pesanan aktif di depan +
    rata-rata waktu proses (dari `store_settings`). Frontend polling status via TanStack Query
    (`refetchInterval`), bukan WebSocket, sesuai keputusan di technical depth.
-9. **Papan dapur (kitchen board)** — admin/staff mengubah status pesanan satu klik, transisi status
-   divalidasi (`409` jika transisi tidak valid, mis. `READY` → `QUEUED`).
+9. **Papan dapur (kitchen board)** — tampilan Kanban 4 kolom (Antre/Diproses/Siap/Selesai), admin/staff
+   drag-and-drop kartu antar kolom (`@dnd-kit/core`) untuk mengubah status. Update dilakukan optimis di
+   UI lalu dikonfirmasi ke server; kalau transisi tidak valid (mis. `READY` → `QUEUED`) server menolak
+   `409` dan kartu otomatis kembali ke kolom asal.
 10. **Laporan otomatis** — produk terlaris, stok rendah, jam tersibuk, tren pendapatan — dihitung dari
     agregasi SQL, di-cache di Redis dengan TTL pendek dan invalidasi saat ada order/stock baru.
+11. **Pembayaran QRIS via gateway (dummy Midtrans) + sesi otomatis-reset** — lihat bagian
+    [Pembayaran QRIS & Sesi](#pembayaran-qris--sesi-pembayaran) di bawah.
+12. **Data pelanggan wajib** — setiap checkout (QRIS maupun CASH) mewajibkan `customerName` dan
+    `customerPhone`, divalidasi di `CheckoutRequest` (`@NotBlank`, pola nomor telepon).
+
+## Pembayaran QRIS & Sesi Pembayaran
+
+Checkout dengan `paymentMethod: "QRIS"` **tidak langsung** membuat pesanan yang masuk ke papan dapur:
+
+1. `POST /api/v1/orders` membuat `Order` dengan status **`AWAITING_PAYMENT`** (nomor antrean masih
+   kosong) + `Payment` berstatus `PENDING`, lalu memanggil `MidtransGatewayService` untuk "charge" QRIS.
+2. Implementasi aktif saat ini, `DummyMidtransGatewayService`, **tidak memanggil api.midtrans.com** —
+   ia mensimulasikan bentuk response Midtrans Core API charge QRIS asli: `transaction_id`, `qr_string`
+   (di sini disebut `qrPayload`, dipakai frontend untuk render QR code), dan `expiry_time` (default 15
+   menit, sama seperti default Midtrans sungguhan). Field-field ini disimpan di `payments`.
+3. Response checkout langsung berisi `qrPayload` + `paymentExpiresAt`, dirender jadi QR code di
+   frontend (`QrisPaymentModal`, bisa diunduh sebagai JPG).
+4. Tombol **"Saya Sudah Bayar"** memanggil `POST /api/v1/orders/{orderNumber}/payments/qris/confirm` —
+   ini mensimulasikan callback/webhook yang di produksi sungguhan datang dari Midtrans. Baru di titik
+   inilah nomor antrean digenerate dan status pindah ke `QUEUED` (masuk papan dapur).
+5. **Sesi otomatis reset kalau tidak dibayar** — `PaymentExpiryScheduler` menyapu tiap 60 detik
+   (`app.qris.expiry-sweep-ms`) mencari `Payment` yang `PENDING` dan sudah lewat `expiresAt`: order
+   dibatalkan (`CANCELLED`), payment ditandai `EXPIRED`, dan stok yang sempat dikurangi saat checkout
+   dikembalikan. Cek yang sama juga jalan "lazy" setiap `GET /api/v1/orders/{orderNumber}` dipanggil,
+   jadi tidak perlu menunggu jadwal sweeper untuk pelanggan yang refresh halaman.
+6. Frontend menyimpan nomor order QRIS yang masih menunggu bayar di `sessionStorage` (tab-scoped) —
+   kalau halaman checkout ter-refresh saat modal QR masih terbuka, sesi otomatis di-resume dari server.
+
+**Untuk pasang Midtrans sungguhan nanti:** buat implementasi baru dari `MidtransGatewayService`
+(package `com.antrigo.backend.payment`) yang memanggil Midtrans Core API dengan `MIDTRANS_SERVER_KEY`
+sungguhan, tandai `@Primary` — kode pemanggilnya (`OrderCheckoutTransactionalService`) tidak perlu
+diubah sama sekali karena bentuk responsnya (`QrisChargeResult`) sudah disamakan dari awal.
 
 ## Data Seeder (demo data)
 
@@ -159,3 +196,36 @@ npm run test:local     # jalankan collection ke http://localhost:8080
 
 Collection mencakup: auth, CRUD produk (admin), alur checkout pelanggan penuh (create → pay →
 polling status), papan dapur admin, validasi 403/409/422, dan skenario stok habis.
+
+## Deploy ke platform gratis
+
+`docker-compose.yml` di root cocok untuk dev lokal, tapi platform PaaS gratis (Render, Koyeb,
+Vercel, dll.) **tidak menjalankan file docker-compose secara langsung** — tiap service di-deploy
+terpisah dan disambungkan lewat environment variable, bukan lewat docker network internal.
+Topologinya:
+
+| Komponen | Platform | Catatan |
+|---|---|---|
+| Frontend (Vite/React) | Vercel (Hobby) | Deploy langsung dari Git, bukan lewat `frontend/Dockerfile` |
+| Backend (Spring Boot) | Render / Koyeb (free instance) | Deploy pakai `backend/Dockerfile` yang sudah ada |
+| MySQL | Aiven for MySQL (free tier) | Wajib TLS, auto power-off saat idle lama |
+| Redis | Upstash Redis (free tier) | Wajib TLS, 500K command/bulan |
+
+Semua env var produksi yang dibutuhkan ada di `backend/.env.example` (bagian "PRODUKSI") dan
+`frontend/.env.example`. Ringkasnya:
+
+1. **Aiven for MySQL** — buat service MySQL free tier, salin host/port/user/password. Set
+   `DB_SSL_MODE=REQUIRED` (Aiven menolak koneksi tanpa TLS).
+2. **Upstash Redis** — buat database, ambil kredensial dari tab TCP/Redis (bukan REST API). Set
+   `REDIS_SSL=true` + `REDIS_PASSWORD`.
+3. **Backend di Render/Koyeb** — deploy dari `backend/Dockerfile`, isi semua env var (lihat
+   `backend/.env.example`), biarkan `PORT` di-inject otomatis oleh platform.
+4. **Frontend di Vercel** — import repo, set root directory `frontend`, isi
+   `VITE_API_BASE_URL=https://<url-backend-anda>/api/v1` (harus `https://`).
+5. Setelah frontend punya domain (mis. `https://antrigo.vercel.app`), balik ke Render/Koyeb dan
+   set `CORS_ORIGINS=https://antrigo.vercel.app` (persis, tanpa trailing slash), lalu redeploy
+   backend supaya CORS berlaku.
+
+**Batasan free tier yang perlu disadari:** backend & MySQL/Redis gratis biasanya auto-sleep
+setelah idle beberapa menit — request pertama setelah bangun bisa lambat (~30–60 detik). Ini
+cukup untuk demo/portofolio, tapi bukan untuk beban produksi sungguhan.

@@ -20,11 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * StockService — stok adalah ledger (stock_movements), kolom products.stock hanya cache
- * yang direkonsiliasi setiap kali ada movement. Semua perubahan stok WAJIB lewat service ini
- * supaya selalu tercatat dan bisa ditelusuri.
- */
 @Service
 @RequiredArgsConstructor
 public class StockService {

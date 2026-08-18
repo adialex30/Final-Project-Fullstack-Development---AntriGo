@@ -8,6 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OrderStatusTest {
 
     @Test
+    void awaitingPaymentCanMoveToQueuedOrCancelled() {
+        assertTrue(OrderStatus.AWAITING_PAYMENT.canTransitionTo(OrderStatus.QUEUED));
+        assertTrue(OrderStatus.AWAITING_PAYMENT.canTransitionTo(OrderStatus.CANCELLED));
+        assertFalse(OrderStatus.AWAITING_PAYMENT.canTransitionTo(OrderStatus.PROCESSING));
+        assertFalse(OrderStatus.AWAITING_PAYMENT.canTransitionTo(OrderStatus.READY));
+    }
+
+    @Test
     void queuedCanMoveToProcessingOrCancelled() {
         assertTrue(OrderStatus.QUEUED.canTransitionTo(OrderStatus.PROCESSING));
         assertTrue(OrderStatus.QUEUED.canTransitionTo(OrderStatus.CANCELLED));

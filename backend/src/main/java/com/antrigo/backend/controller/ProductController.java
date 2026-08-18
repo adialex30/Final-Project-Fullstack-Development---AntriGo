@@ -18,7 +18,6 @@ public class ProductController {
 
     private final ProductService productService;
 
-    /** GET /api/v1/products?search=&category=&page=&size= — publik, dipakai halaman katalog pelanggan. */
     @GetMapping("/api/v1/products")
     public PageResponse<ProductResponse> list(
             @RequestParam(required = false) String search,

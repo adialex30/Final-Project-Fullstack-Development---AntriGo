@@ -1,84 +1,20 @@
-#spring:
-#  application:
-#    name: antrigo-backend
-#  profiles:
-#    active: ${SPRING_PROFILES_ACTIVE:local}
-#  datasource:
-#    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:antrigo}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Jakarta
-#    username: ${DB_USER:root}
-#    password: ${DB_PASSWORD:antrigo123}
-#    hikari:
-#      maximum-pool-size: 10
-#  jpa:
-#    hibernate:
-#      ddl-auto: validate
-#    open-in-view: false
-#    properties:
-#      hibernate:
-#        format_sql: false
-#        jdbc:
-#          time_zone: Asia/Jakarta
-#  flyway:
-#    enabled: true
-#    locations: classpath:db/migration
-#    baseline-on-migrate: true
-#  data:
-#    redis:
-#      # Menggunakan 'localhost' sebagai default jika REDIS_HOST tidak diisi
-#      host: ${REDIS_HOST:localhost}
-#      port: ${REDIS_PORT:6379}
-#  cache:
-#    type: redis
-#    redis:
-#      time-to-live: 60000
-#
-#server:
-#  port: 8081
-#  error:
-#    include-message: always
-#
-#app:
-#  jwt:
-#    secret: ${JWT_SECRET:antrigo-super-secret-key-change-in-production-min-256-bits-long}
-#    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
-#  cors:
-#    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
-#  queue:
-#    avg-prep-time-minutes: ${AVG_PREP_MINUTES:4}
-#  rate-limit:
-#    checkout-per-minute: ${CHECKOUT_RATE_LIMIT:20}
-#
-#springdoc:
-#  swagger-ui:
-#    path: /swagger-ui.html
-#  api-docs:
-#    path: /v3/api-docs
-#
-#management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: health,info
-#  endpoint:
-#    health:
-#      show-details: never
-#
-#logging:
-#  level:
-#    com.antrigo: INFO
-#    org.hibernate.SQL: WARN
-
 spring:
   application:
     name: antrigo-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:antrigo}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Jakarta
+    # sslMode=PREFERRED aman untuk MySQL lokal/docker-compose (MySQL 8 sudah menyediakan
+    # sertifikat self-signed secara default, jadi tetap terenkripsi) MAUPUN untuk provider
+    # terkelola. Untuk deploy ke provider yang MEWAJIBKAN TLS (mis. Aiven for MySQL), set
+    # env var DB_SSL_MODE=REQUIRED — kalau tidak, koneksi akan ditolak oleh server.
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:antrigo}?sslMode=${DB_SSL_MODE:PREFERRED}&allowPublicKeyRetrieval=true&serverTimezone=Asia/Jakarta
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:antrigo123}
     hikari:
-      maximum-pool-size: 10
+      # Provider MySQL gratis (mis. Aiven free tier) punya batas koneksi kecil (satu VM 1GB
+      # RAM) — turunkan lewat DB_POOL_SIZE saat deploy, mis. DB_POOL_SIZE=5.
+      maximum-pool-size: ${DB_POOL_SIZE:10}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -96,13 +32,21 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Kosong secara default (redis:7-alpine lokal tanpa auth). Provider Redis terkelola
+      # gratis (mis. Upstash) mewajibkan password + TLS — isi REDIS_PASSWORD dan set
+      # REDIS_SSL=true saat deploy.
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
   cache:
     type: redis
     redis:
       time-to-live: 60000
 
 server:
-  port: 8081
+  # Beberapa platform PaaS (mis. Render) menyuntikkan port dinamis lewat env var PORT dan
+  # mengharuskan container listen di situ. Default 8080 dipakai untuk lokal/docker-compose.
+  port: ${PORT:8080}
   error:
     include-message: always
 
@@ -116,6 +60,21 @@ app:
     avg-prep-time-minutes: ${AVG_PREP_MINUTES:4}
   rate-limit:
     checkout-per-minute: ${CHECKOUT_RATE_LIMIT:20}
+  qris:
+    # Durasi sesi pembayaran QRIS dummy sebelum auto-reset (menit) — 15 menit meniru default
+    # expiry QRIS Midtrans sungguhan.
+    expiry-minutes: ${QRIS_EXPIRY_MINUTES:15}
+    # Seberapa sering scheduler menyapu sesi QRIS yang kedaluwarsa (milidetik).
+    expiry-sweep-ms: ${QRIS_EXPIRY_SWEEP_MS:60000}
+
+# Kosongkan MIDTRANS_SERVER_KEY (default) -> DummyMidtransGatewayService yang aktif (simulasi lokal).
+# Isi MIDTRANS_SERVER_KEY -> RealMidtransGatewayService otomatis aktif, panggil Sandbox/Production
+# Midtrans sungguhan. Lihat com.antrigo.backend.payment.RealMidtransGatewayService.
+midtrans:
+  merchant-id: ${MIDTRANS_MERCHANT_ID:}
+  client-key: ${MIDTRANS_CLIENT_KEY:}
+  server-key: ${MIDTRANS_SERVER_KEY:}
+  sandbox: ${MIDTRANS_SANDBOX:true}
 
 springdoc:
   swagger-ui:

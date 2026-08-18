@@ -41,7 +41,6 @@ export default function QueueStatusPage() {
     <div className="min-h-screen">
       <CustomerNavbar />
       <div className="mx-auto max-w-3xl px-4 py-6">
-        {/* Signature element: nomor antrean besar — momen puncak dari seluruh alur pemesanan */}
         <div className="card overflow-hidden">
           <div className="bg-ink-800 px-6 py-8 text-center text-paper">
             <p className="text-xs uppercase tracking-[0.2em] text-ember-300">Nomor Antrean Anda</p>
@@ -88,7 +87,6 @@ export default function QueueStatusPage() {
           </div>
         </div>
 
-        {/* Struk digital */}
         <div className="card mt-4 p-5">
           <h2 className="font-display text-lg font-semibold text-ink-800">Struk Digital</h2>
           <div className="mt-3 space-y-2">
@@ -108,6 +106,9 @@ export default function QueueStatusPage() {
           </div>
           {order.tableNumber && (
             <p className="mt-2 text-xs text-ink-400">Meja {order.tableNumber}</p>
+          )}
+          {order.customerName && (
+            <p className="mt-1 text-xs text-ink-400">Atas nama {order.customerName}</p>
           )}
         </div>
 

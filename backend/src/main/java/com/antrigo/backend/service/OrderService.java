@@ -33,9 +33,11 @@ public class OrderService {
 
     private static final int MAX_CHECKOUT_RETRIES = 5;
     private static final List<OrderStatus> BOARD_STATUSES = List.of(
-            OrderStatus.QUEUED, OrderStatus.PROCESSING, OrderStatus.READY);
+            OrderStatus.QUEUED, OrderStatus.PROCESSING, OrderStatus.READY, OrderStatus.COMPLETED);
 
     private final OrderCheckoutTransactionalService checkoutTransactionalService;
+    private final OrderPaymentConfirmationTransactionalService paymentConfirmationTransactionalService;
+    private final PaymentExpiryHelper paymentExpiryHelper;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final StockMovementRepository stockMovementRepository;
@@ -45,11 +47,6 @@ public class OrderService {
     private final QueueService queueService;
     private final CacheManager cacheManager;
 
-    /**
-     * Retry di lapisan ini (bukan di dalam transaksi) karena begitu DataIntegrityViolationException
-     * terlempar, transaksi Spring sudah ditandai rollback-only — transaksi lama tidak bisa dipakai
-     * lagi. Setiap percobaan membuka transaksi REQUIRES_NEW yang baru sepenuhnya.
-     */
     public OrderResponse checkout(CheckoutRequest request) {
         DataIntegrityViolationException lastError = null;
         for (int attempt = 1; attempt <= MAX_CHECKOUT_RETRIES; attempt++) {
@@ -65,11 +62,31 @@ public class OrderService {
         throw new IllegalStateException("Gagal memproses pesanan setelah beberapa percobaan, coba lagi", lastError);
     }
 
-    public OrderResponse getByOrderNumber(String orderNumber) {
-        return OrderResponse.from(findOrderOrThrow(orderNumber));
+    public OrderResponse confirmQrisPayment(String orderNumber) {
+        DataIntegrityViolationException lastError = null;
+        for (int attempt = 1; attempt <= MAX_CHECKOUT_RETRIES; attempt++) {
+            try {
+                OrderResponse response = paymentConfirmationTransactionalService.execute(orderNumber);
+                evictProductAndReportCaches();
+                return response;
+            } catch (DataIntegrityViolationException e) {
+                lastError = e;
+                log.warn("Konfirmasi pembayaran {} attempt {} gagal karena collision, retry...", orderNumber, attempt);
+            }
+        }
+        throw new IllegalStateException("Gagal memproses konfirmasi pembayaran setelah beberapa percobaan", lastError);
     }
 
-    /** Endpoint ringan untuk polling (TanStack Query refetchInterval) — estimasi dihitung ulang live. */
+    @Transactional
+    public OrderResponse getByOrderNumber(String orderNumber) {
+        Order order = findOrderOrThrow(orderNumber);
+        Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+        if (payment != null) {
+            paymentExpiryHelper.expireIfDue(order, payment);
+        }
+        return OrderResponse.from(order, payment);
+    }
+
     public OrderStatusResponse getStatus(String orderNumber) {
         Order order = findOrderOrThrow(orderNumber);
         if (order.getStatus() == OrderStatus.QUEUED || order.getStatus() == OrderStatus.PROCESSING) {
@@ -113,15 +130,27 @@ public class OrderService {
         return OrderResponse.from(order);
     }
 
-    /** Papan dapur admin — pesanan hari ini yang masih aktif, berurutan menurut nomor antrean. */
+    @Transactional
+    public void failQrisPayment(String orderNumber) {
+        Order order = findOrderOrThrow(orderNumber);
+        if (order.getStatus() != OrderStatus.AWAITING_PAYMENT) return; // sudah diproses jalur lain, abaikan
+        Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+        if (payment == null || payment.getStatus() != PaymentStatus.PENDING) return;
+
+        payment.setStatus(PaymentStatus.FAILED);
+        paymentRepository.save(payment);
+        transitionStatus(order, OrderStatus.CANCELLED, "Pembayaran QRIS gagal/ditolak Midtrans", null);
+        reverseStockForOrder(order, "Pembayaran QRIS gagal: " + order.getOrderNumber());
+        evictProductAndReportCaches();
+    }
+
+    @Transactional(readOnly = true)
     public List<KitchenBoardResponse> getKitchenBoard() {
         var businessDate = queueService.resolveBusinessDate();
         return orderRepository.findBoard(businessDate, BOARD_STATUSES).stream()
                 .map(this::toBoardResponse)
                 .collect(Collectors.toList());
     }
-
-    // ---- helpers ----
 
     private Order findOrderOrThrow(String orderNumber) {
         return orderRepository.findByOrderNumber(orderNumber)
@@ -146,7 +175,6 @@ public class OrderService {
                 .build());
     }
 
-    /** Kembalikan stok yang sudah dikurangi saat checkout — dicatat sebagai movement baru, bukan menghapus riwayat lama. */
     private void reverseStockForOrder(Order order, String note) {
         for (OrderItem item : order.getItems()) {
             Product product = productRepository.findByIdForUpdate(item.getProduct().getId())
@@ -170,9 +198,13 @@ public class OrderService {
                 .map(OrderItemResponse::from)
                 .collect(Collectors.toList());
         int waitingMinutes = (int) Duration.between(order.getCreatedAt(), LocalDateTime.now()).toMinutes();
+        Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
         return new KitchenBoardResponse(
-                order.getOrderNumber(), order.getQueueNumber(), order.getTableNumber(),
-                order.getStatus(), items, order.getCreatedAt(), Math.max(waitingMinutes, 0));
+                order.getOrderNumber(), order.getQueueNumber(), order.getTableNumber(), order.getCustomerName(),
+                order.getStatus(),
+                payment != null ? payment.getMethod() : null,
+                payment != null ? payment.getStatus() : null,
+                items, order.getCreatedAt(), Math.max(waitingMinutes, 0));
     }
 
     private void evictProductAndReportCaches() {

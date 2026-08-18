@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from './client'
 
-// ---- Products (admin CRUD) ----
 export function useCreateProduct() {
   const qc = useQueryClient()
   return useMutation({
@@ -26,7 +25,6 @@ export function useDeactivateProduct() {
   })
 }
 
-// ---- Categories (admin) ----
 export function useCreateCategory() {
   const qc = useQueryClient()
   return useMutation({
@@ -35,7 +33,6 @@ export function useCreateCategory() {
   })
 }
 
-// ---- Stock ----
 export function useAdjustStock() {
   const qc = useQueryClient()
   return useMutation({
@@ -49,7 +46,6 @@ export function useAdjustStock() {
   })
 }
 
-// ---- Kitchen board ----
 export function useKitchenBoard() {
   return useQuery({
     queryKey: ['kitchen-board'],
@@ -63,6 +59,17 @@ export function useUpdateOrderStatus() {
   return useMutation({
     mutationFn: async ({ orderNumber, status, note }) =>
       (await apiClient.patch(`/admin/orders/${orderNumber}/status`, { status, note })).data,
+    onMutate: async ({ orderNumber, status }) => {
+      await qc.cancelQueries({ queryKey: ['kitchen-board'] })
+      const previous = qc.getQueryData(['kitchen-board'])
+      qc.setQueryData(['kitchen-board'], (old) =>
+        old?.map((o) => (o.orderNumber === orderNumber ? { ...o, status } : o))
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(['kitchen-board'], context.previous)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kitchen-board'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
@@ -79,7 +86,6 @@ export function useConfirmCashPayment() {
   })
 }
 
-// ---- Reports ----
 export function useDashboard() {
   return useQuery({
     queryKey: ['dashboard'],

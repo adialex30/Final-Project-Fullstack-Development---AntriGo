@@ -35,3 +35,10 @@ export function useCancelOrder() {
     mutationFn: async (orderNumber) => (await apiClient.patch(`/orders/${orderNumber}/cancel`)).data,
   })
 }
+
+export function useConfirmQrisPayment() {
+  return useMutation({
+    mutationFn: async (orderNumber) =>
+      (await apiClient.post(`/orders/${orderNumber}/payments/qris/confirm`)).data,
+  })
+}

@@ -14,13 +14,11 @@ import ProtectedRoute from './routes/ProtectedRoute'
 export default function App() {
   return (
     <Routes>
-      {/* Pelanggan — publik, alur scan QR -> menu -> keranjang -> checkout -> antrean */}
       <Route path="/" element={<MenuPage />} />
       <Route path="/cart" element={<CartPage />} />
       <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/queue/:orderNumber" element={<QueueStatusPage />} />
 
-      {/* Admin */}
       <Route path="/admin/login" element={<LoginPage />} />
       <Route
         path="/admin/dashboard"

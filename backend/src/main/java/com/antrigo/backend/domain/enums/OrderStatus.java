@@ -4,10 +4,10 @@ import java.util.List;
 import java.util.Map;
 
 public enum OrderStatus {
-    QUEUED, PROCESSING, READY, COMPLETED, CANCELLED;
+    AWAITING_PAYMENT, QUEUED, PROCESSING, READY, COMPLETED, CANCELLED;
 
-    /** Peta transisi status yang diperbolehkan — dipakai untuk validasi 409. */
     private static final Map<OrderStatus, List<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
+            AWAITING_PAYMENT, List.of(QUEUED, CANCELLED),
             QUEUED, List.of(PROCESSING, CANCELLED),
             PROCESSING, List.of(READY, CANCELLED),
             READY, List.of(COMPLETED),

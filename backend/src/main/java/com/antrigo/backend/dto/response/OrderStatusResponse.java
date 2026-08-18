@@ -5,10 +5,9 @@ import com.antrigo.backend.domain.enums.OrderStatus;
 
 import java.time.LocalDateTime;
 
-/** Response ringan khusus untuk polling status (dipakai TanStack Query refetchInterval). */
 public record OrderStatusResponse(
         String orderNumber,
-        int queueNumber,
+        Integer queueNumber,
         OrderStatus status,
         int estimatedWaitMinutes,
         LocalDateTime updatedAt

@@ -1,0 +1,46 @@
+### === Backend: Java / Spring Boot / Maven === ###
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+HELP.md
+backend/.env
+
+### === Frontend: Node / React + Vite === ###
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+frontend/.env
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### === Environment variables (JANGAN pernah commit secret) === ###
+.env
+.env.local
+.env.*.local
+!*.env.example
+
+### === IDE === ###
+.idea/
+*.iml
+*.iws
+.vscode/
+!.vscode/extensions.json
+
+### === OS === ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### === Logs === ###
+*.log
+logs/
+
+### === Docker (kalau ada override lokal) === ###
+docker-compose.override.yml

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.Map;
 
-/** Format error tunggal untuk seluruh API — dihasilkan oleh GlobalExceptionHandler. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiError(
         Instant timestamp,

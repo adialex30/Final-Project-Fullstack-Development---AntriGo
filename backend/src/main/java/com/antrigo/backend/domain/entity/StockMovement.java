@@ -27,7 +27,6 @@ public class StockMovement {
     @Column(nullable = false, length = 30)
     private StockMovementType type;
 
-    /** Positif = menambah stok, negatif = mengurangi. Ledger — sumber kebenaran. */
     @Column(name = "quantity_change", nullable = false)
     private int quantityChange;
 

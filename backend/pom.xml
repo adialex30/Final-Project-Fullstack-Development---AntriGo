@@ -88,6 +88,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>com.midtrans</groupId>
+            <artifactId>java-library</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!-- Rate limiting -->
         <dependency>
             <groupId>com.bucket4j</groupId>

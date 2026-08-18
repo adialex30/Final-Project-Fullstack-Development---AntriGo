@@ -8,11 +8,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
-/**
- * QueueService — menghitung nomor antrean & estimasi waktu tunggu dari beban dapur saat ini.
- * "Hari operasional" (business date) dipakai sebagai basis reset nomor antrean setiap hari,
- * bukan tengah malam UTC, supaya konsisten dengan jam operasional warung di Asia/Jakarta.
- */
 @Service
 @RequiredArgsConstructor
 public class QueueService {

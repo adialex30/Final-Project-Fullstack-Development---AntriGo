@@ -18,11 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * ReportService — laporan otomatis untuk keputusan bisnis pemilik warung: produk terlaris,
- * stok rendah, jam tersibuk, tren pendapatan. Hasil di-cache di Redis (TTL pendek, 30 detik)
- * dan otomatis di-evict tiap ada order/stock baru (lihat evictProductAndReportCaches di OrderService).
- */
 @Service
 @RequiredArgsConstructor
 public class ReportService {

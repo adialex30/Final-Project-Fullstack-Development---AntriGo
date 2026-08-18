@@ -3,11 +3,6 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 const CartContext = createContext(null)
 const STORAGE_KEY = 'antrigo_cart'
 
-/**
- * Keranjang di sisi client HANYA untuk pengalaman belanja (tampilkan harga, hitung subtotal
- * perkiraan). Saat checkout, payload yang dikirim ke server hanya berisi productId, variantId,
- * quantity, note — harga di sini tidak pernah dikirim; server menghitung ulang dari database.
- */
 export function CartProvider({ children }) {
   const [items, setItems] = useState(() => {
     try {
@@ -18,6 +13,8 @@ export function CartProvider({ children }) {
     }
   })
   const [tableNumber, setTableNumber] = useState(() => localStorage.getItem('antrigo_table') || '')
+  const [customerName, setCustomerName] = useState(() => localStorage.getItem('antrigo_customer_name') || '')
+  const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('antrigo_customer_phone') || '')
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
@@ -26,6 +23,14 @@ export function CartProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('antrigo_table', tableNumber)
   }, [tableNumber])
+
+  useEffect(() => {
+    localStorage.setItem('antrigo_customer_name', customerName)
+  }, [customerName])
+
+  useEffect(() => {
+    localStorage.setItem('antrigo_customer_phone', customerPhone)
+  }, [customerPhone])
 
   const cartKey = (productId, variantId) => `${productId}-${variantId ?? 'none'}`
 
@@ -98,6 +103,10 @@ export function CartProvider({ children }) {
         toCheckoutItems,
         tableNumber,
         setTableNumber,
+        customerName,
+        setCustomerName,
+        customerPhone,
+        setCustomerPhone,
       }}
     >
       {children}

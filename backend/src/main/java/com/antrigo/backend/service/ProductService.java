@@ -24,6 +24,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
 
+    @Transactional(readOnly = true)
     @Cacheable(value = "products", key = "T(String).format('%s-%s-%d-%d', #search, #categoryId, #page, #size)")
     public PageResponse<ProductResponse> search(String search, Long categoryId, int page, int size) {
         Page<Product> result = productRepository.search(
@@ -34,6 +35,7 @@ public class ProductService {
         return PageResponse.from(result.map(ProductResponse::from));
     }
 
+    @Transactional(readOnly = true)
     public ProductResponse findById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Produk tidak ditemukan: " + id));
@@ -80,8 +82,6 @@ public class ProductService {
         if (request.active() != null) {
             product.setActive(request.active());
         }
-        // NB: stock TIDAK diubah lewat endpoint ini — perubahan stok wajib lewat StockService
-        // supaya selalu tercatat sebagai stock_movement (ledger), tidak pernah "diam-diam" berubah.
         return ProductResponse.from(productRepository.save(product));
     }
 
