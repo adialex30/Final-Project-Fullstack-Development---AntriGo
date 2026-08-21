@@ -24,7 +24,6 @@ public class AuthController {
         return authService.login(request);
     }
 
-    /** Hanya ADMIN yang boleh membuat akun staff baru — dipanggil dari dashboard admin. */
     @PostMapping("/register")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)

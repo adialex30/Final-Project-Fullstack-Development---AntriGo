@@ -103,6 +103,7 @@ public class OrderService {
         Order order = findOrderOrThrow(orderNumber);
         transitionStatus(order, OrderStatus.CANCELLED, reason, null);
         reverseStockForOrder(order, "Pembatalan " + order.getOrderNumber());
+        syncPendingPaymentOnCancel(order);
         evictProductAndReportCaches();
         return OrderResponse.from(order);
     }
@@ -114,6 +115,7 @@ public class OrderService {
         transitionStatus(order, request.status(), request.note(), actor);
         if (request.status() == OrderStatus.CANCELLED) {
             reverseStockForOrder(order, "Dibatalkan admin: " + order.getOrderNumber());
+            syncPendingPaymentOnCancel(order);
         }
         evictProductAndReportCaches();
         return OrderResponse.from(order);
@@ -173,6 +175,22 @@ public class OrderService {
                 .changedBy(actor)
                 .note(note)
                 .build());
+    }
+
+    /**
+     * cancel() dan updateStatus() bisa membatalkan order yang payment-nya masih PENDING (mis. order
+     * AWAITING_PAYMENT dibatalkan manual dari admin panel). Tanpa ini, baris payment itu nyangkut
+     * selamanya di status PENDING — PaymentExpiryScheduler akan terus "menemukan"-nya tiap sweep tapi
+     * tidak pernah benar-benar bisa meresetnya (order sudah bukan AWAITING_PAYMENT), jadi harus
+     * disinkronkan di sini, saat order-nya dibatalkan.
+     */
+    private void syncPendingPaymentOnCancel(Order order) {
+        paymentRepository.findByOrderId(order.getId()).ifPresent(payment -> {
+            if (payment.getStatus() == PaymentStatus.PENDING) {
+                payment.setStatus(PaymentStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+        });
     }
 
     private void reverseStockForOrder(Order order, String note) {

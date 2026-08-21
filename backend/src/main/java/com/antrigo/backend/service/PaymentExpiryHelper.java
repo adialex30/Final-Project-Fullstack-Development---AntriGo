@@ -30,11 +30,21 @@ public class PaymentExpiryHelper {
     private final StockMovementRepository stockMovementRepository;
 
     public boolean expireIfDue(Order order, Payment payment) {
-        if (order.getStatus() != OrderStatus.AWAITING_PAYMENT || payment.getStatus() != PaymentStatus.PENDING) {
+        if (payment.getStatus() != PaymentStatus.PENDING) {
             return false;
         }
         if (payment.getExpiresAt() == null || payment.getExpiresAt().isAfter(LocalDateTime.now())) {
             return false;
+        }
+
+        if (order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
+            // Order sudah dipindah status lewat jalur lain (mis. dibatalkan manual dari admin panel)
+            // tapi payment-nya ketinggalan PENDING. Tandai payment-nya saja jadi EXPIRED supaya tidak
+            // terus-menerus "ketemu" lagi di sweep berikutnya — jangan sentuh order/stock di sini,
+            // itu bukan urusan alur kedaluwarsa QRIS lagi.
+            payment.setStatus(PaymentStatus.EXPIRED);
+            paymentRepository.save(payment);
+            return true;
         }
 
         payment.setStatus(PaymentStatus.EXPIRED);
