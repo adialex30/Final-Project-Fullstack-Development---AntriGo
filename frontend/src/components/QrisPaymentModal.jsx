@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react'
 import QRCode from 'qrcode'
 import { formatIDR } from '../utils/currency'
 
-const FALLBACK_DURATION_SECONDS = 15 * 60
-const WARNING_THRESHOLD_SECONDS = 120
+const FALLBACK_DURATION_SECONDS = 60
+const WARNING_THRESHOLD_SECONDS = 15
 
 function formatCountdown(totalSeconds) {
   const s = Math.max(0, totalSeconds)
