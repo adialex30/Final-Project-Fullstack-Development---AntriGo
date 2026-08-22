@@ -56,7 +56,7 @@ midtrans:
   merchant-id: ${MIDTRANS_MERCHANT_ID:}
   client-key: ${MIDTRANS_CLIENT_KEY:}
   server-key: ${MIDTRANS_SERVER_KEY:}
-  sandbox: ${MIDTRANS_SANDBOX:true}
+  sandbox: ${MIDTRANS_SANDBOX:}
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

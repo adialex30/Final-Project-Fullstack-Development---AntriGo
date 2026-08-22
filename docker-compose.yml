@@ -20,20 +20,6 @@ services:
     networks:
       - antrigo-net
 
-  redis:
-    image: redis:7-alpine
-    container_name: antrigo-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    networks:
-      - antrigo-net
-
   backend:
     build:
       context: ./backend
@@ -43,8 +29,6 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_HOST: mysql
@@ -52,8 +36,6 @@ services:
       DB_NAME: ${DB_NAME:-antrigo}
       DB_USER: ${DB_USER:-antrigo}
       DB_PASSWORD: ${DB_PASSWORD:-antrigo123}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-antrigo-super-secret-key-change-in-production-min-256-bits-long}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}

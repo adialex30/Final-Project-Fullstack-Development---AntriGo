@@ -23,11 +23,14 @@ public class PaymentExpiryScheduler {
     @Transactional
     public void sweepExpiredPayments() {
         List<Payment> expired = paymentRepository.findExpiredPending(LocalDateTime.now());
+        int resetCount = 0;
         for (Payment payment : expired) {
-            expiryHelper.expireIfDue(payment.getOrder(), payment);
+            if (expiryHelper.expireIfDue(payment.getOrder(), payment)) {
+                resetCount++;
+            }
         }
-        if (!expired.isEmpty()) {
-            log.info("[PaymentExpiryScheduler] {} sesi pembayaran QRIS kedaluwarsa direset otomatis.", expired.size());
+        if (resetCount > 0) {
+            log.info("[PaymentExpiryScheduler] {} sesi pembayaran QRIS kedaluwarsa direset otomatis.", resetCount);
         }
     }
 }

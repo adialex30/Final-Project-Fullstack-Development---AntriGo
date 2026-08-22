@@ -10,7 +10,7 @@ Proyek ini adalah implementasi nyata (bukan mockup) dari studi kasus final proje
 |---|---|
 | Backend | Spring Boot 3 (Java 17), Spring Security JWT, Spring Data JPA, Flyway |
 | Database | MySQL 8 |
-| Cache | Redis |
+| Cache | In-Memory (Caffeine) |
 | Frontend | React 19 + Vite, Tailwind CSS, TanStack Query, React Router, Axios |
 | Infra | Docker Compose |
 | API Testing | Postman + Newman (automation testing) |
@@ -28,7 +28,7 @@ antrigo/
 
 ## Menjalankan seluruh stack (Docker Compose)
 
-Prasyarat: Docker + Docker Compose terpasang. Tidak perlu install Java/Node/MySQL/Redis secara lokal.
+Prasyarat: Docker + Docker Compose terpasang. Tidak perlu install Java/Node/MySQL secara lokal.
 
 ```bash
 cp backend/.env.example backend/.env      # opsional, default sudah jalan
@@ -41,7 +41,6 @@ Setelah semua container `healthy`:
 - Backend API: http://localhost:8080/api/v1
 - Swagger / OpenAPI: http://localhost:8080/swagger-ui.html
 - MySQL: localhost:3306 (db `antrigo`, user `antrigo`, password `antrigo123`)
-- Redis: localhost:6379
 
 Flyway otomatis menjalankan migration + seed data saat backend start pertama kali (lihat
 `backend/src/main/resources/db/migration`). Seed berisi 1 akun admin, beberapa kategori, produk,
@@ -56,7 +55,7 @@ dan varian supaya dashboard tidak terlihat kosong.
 **Backend**
 ```bash
 cd backend
-# butuh MySQL 8 + Redis jalan lokal, sesuaikan src/main/resources/application-local.yml
+# butuh MySQL 8 jalan lokal (cache in-memory, tidak perlu server tambahan), sesuaikan src/main/resources/application-local.yml
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
@@ -70,7 +69,7 @@ npm run dev
 ## Alur bisnis inti yang diimplementasikan
 
 1. **Katalog & keranjang** — publik, tanpa login. `GET /api/v1/products` dengan search, filter
-   kategori, pagination, dan cache Redis.
+   kategori, pagination, dan cache in-memory.
 2. **Checkout dengan concurrency safety** — `POST /api/v1/orders` menjalankan satu transaksi DB:
    baris produk dikunci dengan pessimistic lock (`SELECT ... FOR UPDATE`), **diurutkan menurut
    product id** supaya dua checkout yang overlap tidak saling deadlock. Stok divalidasi ulang di
@@ -97,7 +96,7 @@ npm run dev
    UI lalu dikonfirmasi ke server; kalau transisi tidak valid (mis. `READY` → `QUEUED`) server menolak
    `409` dan kartu otomatis kembali ke kolom asal.
 10. **Laporan otomatis** — produk terlaris, stok rendah, jam tersibuk, tren pendapatan — dihitung dari
-    agregasi SQL, di-cache di Redis dengan TTL pendek dan invalidasi saat ada order/stock baru.
+    agregasi SQL, di-cache in-memory dengan TTL pendek dan invalidasi saat ada order/stock baru.
 11. **Pembayaran QRIS via gateway (dummy Midtrans) + sesi otomatis-reset** — lihat bagian
     [Pembayaran QRIS & Sesi](#pembayaran-qris--sesi-pembayaran) di bawah.
 12. **Data pelanggan wajib** — setiap checkout (QRIS maupun CASH) mewajibkan `customerName` dan
@@ -207,25 +206,26 @@ Topologinya:
 | Komponen | Platform | Catatan |
 |---|---|---|
 | Frontend (Vite/React) | Vercel (Hobby) | Deploy langsung dari Git, bukan lewat `frontend/Dockerfile` |
-| Backend (Spring Boot) | Render / Koyeb (free instance) | Deploy pakai `backend/Dockerfile` yang sudah ada |
+| Backend (Spring Boot) | Render / Koyeb / Railway (free instance) | Deploy pakai `backend/Dockerfile` yang sudah ada |
 | MySQL | Aiven for MySQL (free tier) | Wajib TLS, auto power-off saat idle lama |
-| Redis | Upstash Redis (free tier) | Wajib TLS, 500K command/bulan |
+
+Cache sekarang in-memory (Caffeine, lihat `CacheConfig.java`), jadi tidak ada lagi komponen
+Redis terpisah yang perlu di-provision — satu service eksternal lebih sedikit untuk di-setup dan
+di-maintain.
 
 Semua env var produksi yang dibutuhkan ada di `backend/.env.example` (bagian "PRODUKSI") dan
 `frontend/.env.example`. Ringkasnya:
 
 1. **Aiven for MySQL** — buat service MySQL free tier, salin host/port/user/password. Set
    `DB_SSL_MODE=REQUIRED` (Aiven menolak koneksi tanpa TLS).
-2. **Upstash Redis** — buat database, ambil kredensial dari tab TCP/Redis (bukan REST API). Set
-   `REDIS_SSL=true` + `REDIS_PASSWORD`.
-3. **Backend di Render/Koyeb** — deploy dari `backend/Dockerfile`, isi semua env var (lihat
+2. **Backend di Render/Koyeb/Railway** — deploy dari `backend/Dockerfile`, isi semua env var (lihat
    `backend/.env.example`), biarkan `PORT` di-inject otomatis oleh platform.
-4. **Frontend di Vercel** — import repo, set root directory `frontend`, isi
+3. **Frontend di Vercel** — import repo, set root directory `frontend`, isi
    `VITE_API_BASE_URL=https://<url-backend-anda>/api/v1` (harus `https://`).
-5. Setelah frontend punya domain (mis. `https://antrigo.vercel.app`), balik ke Render/Koyeb dan
+4. Setelah frontend punya domain (mis. `https://antrigo.vercel.app`), balik ke platform backend dan
    set `CORS_ORIGINS=https://antrigo.vercel.app` (persis, tanpa trailing slash), lalu redeploy
    backend supaya CORS berlaku.
 
-**Batasan free tier yang perlu disadari:** backend & MySQL/Redis gratis biasanya auto-sleep
-setelah idle beberapa menit — request pertama setelah bangun bisa lambat (~30–60 detik). Ini
-cukup untuk demo/portofolio, tapi bukan untuk beban produksi sungguhan.
+**Batasan free tier yang perlu disadari:** backend & MySQL gratis biasanya auto-sleep setelah
+idle beberapa menit — request pertama setelah bangun bisa lambat (~30–60 detik). Ini cukup untuk
+demo/portofolio, tapi bukan untuk beban produksi sungguhan.
