@@ -22,19 +22,7 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-#  data:
-#    redis:
-#      host: ${REDIS_HOST:localhost}
-#      port: ${REDIS_PORT:6379}
-#      password: ${REDIS_PASSWORD:}
-#      ssl:
-#        enabled: ${REDIS_SSL:false}
-#      repositories:
-#        enabled: false
-#  cache:
-#    type: redis
-#    redis:
-#      time-to-live: 60000
+
 server:
   port: ${PORT:8080}
   error:
@@ -51,8 +39,8 @@ app:
   rate-limit:
     checkout-per-minute: ${CHECKOUT_RATE_LIMIT:20}
   qris:
-    expiry-minutes: ${QRIS_EXPIRY_MINUTES:15}
-    expiry-sweep-ms: ${QRIS_EXPIRY_SWEEP_MS:60000}
+    expiry-minutes: ${QRIS_EXPIRY_MINUTES:1}
+    expiry-sweep-ms: ${QRIS_EXPIRY_SWEEP_MS:10000}
 midtrans:
   merchant-id: ${MIDTRANS_MERCHANT_ID:}
   client-key: ${MIDTRANS_CLIENT_KEY:}
