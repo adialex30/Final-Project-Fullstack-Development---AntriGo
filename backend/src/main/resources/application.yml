@@ -8,11 +8,7 @@ spring:
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:antrigo123}
     hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:5}
-      minimum-idle: ${DB_POOL_MIN_IDLE:2}
-      connection-timeout: ${DB_CONN_TIMEOUT_MS:20000}
-      idle-timeout: ${DB_IDLE_TIMEOUT_MS:300000}
-      max-lifetime: ${DB_MAX_LIFETIME_MS:600000}
+      maximum-pool-size: ${DB_POOL_SIZE:10}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -22,27 +18,33 @@ spring:
         format_sql: false
         jdbc:
           time_zone: Asia/Jakarta
-        dialect: org.hibernate.dialect.MySQLDialect
-        temp:
-          use_jdbc_metadata_defaults: false
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-  jmx:
-    enabled: false
-
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+      repositories:
+        enabled: false
+  cache:
+    type: redis
+    redis:
+      time-to-live: 60000
 server:
   port: ${PORT:8080}
   error:
     include-message: always
-
 app:
   jwt:
     secret: ${JWT_SECRET:antrigo-super-secret-key-change-in-production-min-256-bits-long}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000,}
   queue:
     avg-prep-time-minutes: ${AVG_PREP_MINUTES:4}
   rate-limit:
@@ -50,21 +52,16 @@ app:
   qris:
     expiry-minutes: ${QRIS_EXPIRY_MINUTES:15}
     expiry-sweep-ms: ${QRIS_EXPIRY_SWEEP_MS:60000}
-
 midtrans:
   merchant-id: ${MIDTRANS_MERCHANT_ID:}
   client-key: ${MIDTRANS_CLIENT_KEY:}
   server-key: ${MIDTRANS_SERVER_KEY:}
   sandbox: ${MIDTRANS_SANDBOX:true}
-
 springdoc:
   swagger-ui:
-    enabled: ${SWAGGER_ENABLED:true}
     path: /swagger-ui.html
   api-docs:
-    enabled: ${SWAGGER_ENABLED:true}
     path: /v3/api-docs
-
 management:
   endpoints:
     web:
@@ -73,7 +70,6 @@ management:
   endpoint:
     health:
       show-details: never
-
 logging:
   level:
     com.antrigo: INFO

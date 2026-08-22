@@ -24,20 +24,6 @@
         <springdoc.version>2.6.0</springdoc.version>
     </properties>
 
-    <!-- Auto-load backend/.env saat run lokal (mvn spring-boot:run / IDE) — Spring Boot TIDAK baca
-         .env secara native, ini yang bikin MIDTRANS_SERVER_KEY dkk kosong kalau tidak lewat Docker. -->
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>me.paulschwarz</groupId>
-                <artifactId>spring-dotenv-bom</artifactId>
-                <version>5.1.0</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -57,13 +43,11 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-cache</artifactId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- Cache in-memory (menggantikan Redis) — versi diatur otomatis oleh
-             spring-boot-starter-parent BOM, tidak perlu server eksternal. -->
         <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -108,26 +92,6 @@
             <groupId>com.midtrans</groupId>
             <artifactId>java-library</artifactId>
             <version>3.0.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>me.paulschwarz</groupId>
-            <artifactId>springboot3-dotenv</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Generate PNG QR code di backend dari qr_string Midtrans, supaya frontend selalu terima
-             <img> (data URI) — bukan render <canvas> client-side, yang tidak punya "Copy image
-             address" di klik-kanan browser. -->
-        <dependency>
-            <groupId>com.google.zxing</groupId>
-            <artifactId>core</artifactId>
-            <version>3.5.3</version>
-        </dependency>
-        <dependency>
-            <groupId>com.google.zxing</groupId>
-            <artifactId>javase</artifactId>
-            <version>3.5.3</version>
         </dependency>
 
         <!-- Rate limiting -->
