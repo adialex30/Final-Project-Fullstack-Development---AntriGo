@@ -1,6 +1,7 @@
 import React from 'react'
 import AdminLayout from '../../components/AdminLayout'
 import { useDashboard } from '../../api/admin'
+import { useAuth } from '../../context/AuthContext'
 import { formatIDR } from '../../utils/currency'
 
 function StatCard({ label, value, accent }) {
@@ -13,22 +14,26 @@ function StatCard({ label, value, accent }) {
 }
 
 export default function DashboardPage() {
-  const { data, isLoading } = useDashboard()
+    const { data, isLoading } = useDashboard()
+    const { user } = useAuth()
+    const isAdmin = user?.role === 'ADMIN'
 
-  return (
-    <AdminLayout>
-      <h1 className="font-display text-2xl font-semibold text-ink-800">Dashboard</h1>
-      <p className="text-sm text-ink-500">Ringkasan operasional hari ini</p>
+    return (
+        <AdminLayout>
+            <h1 className="font-display text-2xl font-semibold text-ink-800">Dashboard</h1>
+            <p className="text-sm text-ink-500">Ringkasan operasional hari ini</p>
 
-      {isLoading || !data ? (
-        <p className="mt-6 text-ink-400">Memuat laporan...</p>
-      ) : (
-        <>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Pendapatan Hari Ini" value={formatIDR(data.revenueToday)} accent="text-ember-600" />
-            <StatCard label="Pesanan Hari Ini" value={data.ordersToday} />
-            <StatCard label="Sedang Aktif" value={data.ordersActiveNow} accent="text-sprout-600" />
-          </div>
+            {isLoading || !data ? (
+                <p className="mt-6 text-ink-400">Memuat laporan...</p>
+            ) : (
+                <>
+                    <div className={`mt-6 grid grid-cols-1 gap-4 ${isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                        {isAdmin && (
+                            <StatCard label="Pendapatan Hari Ini" value={formatIDR(data.revenueToday)} accent="text-ember-600" />
+                        )}
+                        <StatCard label="Pesanan Hari Ini" value={data.ordersToday} />
+                        <StatCard label="Sedang Aktif" value={data.ordersActiveNow} accent="text-sprout-600" />
+                    </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="card p-5">
