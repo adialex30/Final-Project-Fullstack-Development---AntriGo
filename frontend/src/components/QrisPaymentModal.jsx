@@ -15,7 +15,7 @@ function secondsUntil(isoTimestamp) {
 }
 
 function isQrImageUrl(payload) {
-  return typeof payload === 'string' && /^https?:\/\//i.test(payload)
+  return typeof payload === 'string' && /^(https?:\/\/|data:image\/)/i.test(payload)
 }
 
 export default function QrisPaymentModal({ open, orderNumber, amount, qrPayload, expiresAt, onClose }) {
@@ -44,10 +44,15 @@ export default function QrisPaymentModal({ open, orderNumber, amount, qrPayload,
   if (!open) return null
 
   const handleDownload = () => {
-    if (isImage) { window.open(qrPayload, '_blank', 'noopener,noreferrer'); return }
+    const link = document.createElement('a')
+    if (isImage) {
+      link.download = `QRIS-AntriGo-${orderNumber || 'sesi'}.png`
+      link.href = qrPayload
+      link.click()
+      return
+    }
     const canvas = canvasRef.current
     if (!canvas) return
-    const link = document.createElement('a')
     link.download = `QRIS-AntriGo-${orderNumber || 'sesi'}.jpg`
     link.href = canvas.toDataURL('image/jpeg', 0.95)
     link.click()
@@ -85,7 +90,7 @@ export default function QrisPaymentModal({ open, orderNumber, amount, qrPayload,
           </div>
 
           <button onClick={handleDownload} disabled={expired} className="btn-secondary mt-3 w-full py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50">
-            {isImage ? 'Buka QR di Tab Baru' : 'Unduh QR (JPG)'}
+            {isImage ? 'Unduh QR (PNG)' : 'Unduh QR (JPG)'}
           </button>
 
           {expired ? (
