@@ -1,34 +1,58 @@
 # AntriGo — Self-Order & Antrean Digital untuk UMKM Kuliner
 
 Aplikasi self-order berbasis QR untuk warung/kedai UMKM. Pelanggan scan QR di meja → pilih menu →
-checkout → dapat nomor antrean digital + estimasi waktu tunggu. Admin mengelola menu, stok, papan
-antrean dapur, dan laporan penjualan dari satu dashboard.
+checkout → bayar QRIS (Midtrans Sandbox) → dapat nomor antrean digital + estimasi waktu tunggu.
+Admin & staff mengelola menu, stok, papan antrean dapur, dan laporan penjualan dari satu dashboard
+dengan hak akses berbeda per role.
 
-Proyek ini adalah implementasi nyata (bukan mockup) dari studi kasus final project, sesuai tech stack:
+**Live demo:**
+- Frontend (pelanggan + admin): https://antrigo-aditya-dwi.vercel.app
+- Backend API: https://antrigo-be.up.railway.app/api/v1
+- Swagger / OpenAPI: https://antrigo-be.up.railway.app/swagger-ui.html
+
+## Tech Stack
 
 | Layer | Teknologi |
 |---|---|
-| Backend | Spring Boot 3 (Java 17), Spring Security JWT, Spring Data JPA, Flyway |
+| Backend | Spring Boot 3 (Java 17), Spring Security (JWT, stateless), Spring Data JPA, Flyway |
 | Database | MySQL 8 |
-| Cache | In-Memory (Caffeine) |
+| Cache | In-memory (Caffeine) — `products`, `categories`, `reports` |
+| Payment Gateway | Midtrans Core API (QRIS, Sandbox) |
 | Frontend | React 19 + Vite, Tailwind CSS, TanStack Query, React Router, Axios |
-| Infra | Docker Compose |
-| API Testing | Postman + Newman (automation testing) |
+| Deploy | Backend: Railway (Docker) · Frontend: Vercel |
+| API Docs | springdoc-openapi (Swagger UI) |
+| API Testing | Postman collection |
 
-## Struktur folder
+## Struktur Folder
 
 ```
 antrigo/
 ├── backend/          # Spring Boot API
 ├── frontend/         # React + Vite SPA
-├── postman/          # Collection, environment, Newman automation
 ├── docker-compose.yml
 └── .github/workflows/ci.yml
 ```
 
-## Menjalankan seluruh stack (Docker Compose)
+## Role & Hak Akses
 
-Prasyarat: Docker + Docker Compose terpasang. Tidak perlu install Java/Node/MySQL secara lokal.
+| Halaman | Admin | Staff |
+|---|:---:|:---:|
+| Dashboard | ✅ (termasuk Pendapatan Hari Ini) | ✅ (tanpa angka Pendapatan) |
+| Papan Dapur | — | ✅ |
+| Produk & Stok | ✅ | — |
+| Laporan | ✅ | — |
+| Registrasi Staff | ✅ | — |
+
+Dikunci di **dua lapis**: route/menu disembunyikan di frontend (`ProtectedRoute` + filter nav), dan
+endpoint terkait di backend dilindungi `@PreAuthorize` sesuai role — jadi tidak bisa dilewati lewat
+pemanggilan API langsung meski link UI-nya disembunyikan.
+
+Registrasi akun staff/admin baru hanya bisa dilakukan oleh admin yang sudah login
+(`POST /api/v1/auth/register`, `@PreAuthorize("hasRole('ADMIN')")`) — tidak ada pendaftaran publik.
+
+## Menjalankan Lokal (Docker Compose)
+
+Prasyarat: Docker + Docker Compose. Tidak perlu install Java/Node/MySQL manual.
 
 ```bash
 cp backend/.env.example backend/.env      # opsional, default sudah jalan
@@ -36,26 +60,18 @@ docker compose up --build
 ```
 
 Setelah semua container `healthy`:
-
-- Frontend (pelanggan + admin): http://localhost:5173
+- Frontend: http://localhost:5173
 - Backend API: http://localhost:8080/api/v1
-- Swagger / OpenAPI: http://localhost:8080/swagger-ui.html
+- Swagger: http://localhost:8080/swagger-ui.html
 - MySQL: localhost:3306 (db `antrigo`, user `antrigo`, password `antrigo123`)
 
-Flyway otomatis menjalankan migration + seed data saat backend start pertama kali (lihat
-`backend/src/main/resources/db/migration`). Seed berisi 1 akun admin, beberapa kategori, produk,
-dan varian supaya dashboard tidak terlihat kosong.
+**Akun admin default (seed):** `admin@antrigo.id` / `Admin12345`
 
-**Akun admin default (seed):**
-- email: `admin@antrigo.id`
-- password: `Admin12345`
-
-## Menjalankan tanpa Docker (development)
+## Menjalankan Tanpa Docker
 
 **Backend**
 ```bash
 cd backend
-# butuh MySQL 8 jalan lokal (cache in-memory, tidak perlu server tambahan), sesuaikan src/main/resources/application-local.yml
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
@@ -66,166 +82,66 @@ npm install
 npm run dev
 ```
 
-## Alur bisnis inti yang diimplementasikan
+## Alur Bisnis Inti
 
-1. **Katalog & keranjang** — publik, tanpa login. `GET /api/v1/products` dengan search, filter
-   kategori, pagination, dan cache in-memory.
-2. **Checkout dengan concurrency safety** — `POST /api/v1/orders` menjalankan satu transaksi DB:
-   baris produk dikunci dengan pessimistic lock (`SELECT ... FOR UPDATE`), **diurutkan menurut
-   product id** supaya dua checkout yang overlap tidak saling deadlock. Stok divalidasi ulang di
-   dalam kunci; jika kurang → `422` dan seluruh transaksi rollback.
-3. **Harga dihitung ulang di server** — payload checkout hanya berisi `productId`, `variantId`,
-   `quantity`, `note`. Tidak ada field harga yang diterima dari client.
-4. **Nomor antrean unik per hari** — untuk CASH digenerate langsung saat checkout; untuk QRIS baru
-   digenerate SETELAH pembayaran dikonfirmasi (lihat poin 11). Dijamin oleh
-   `UNIQUE (business_date, queue_number)` di database (nullable-safe — banyak order QRIS yang masih
-   menunggu bayar boleh sama-sama `NULL` tanpa bentrok), jadi tidak mungkin ada nomor ganda meski
-   race condition tinggi.
-5. **Stok sebagai ledger** — setiap perubahan stok (checkout, admin adjustment, pembatalan, **auto-reset
-   sesi QRIS kedaluwarsa**) dicatat di `stock_movements`. Kolom `products.stock` hanya cache yang bisa
-   direkonsiliasi.
-6. **Snapshot harga & nama di order_items** — perubahan menu di kemudian hari tidak mengubah riwayat
-   struk pelanggan lama.
-7. **RBAC** — endpoint admin dilindungi `@PreAuthorize` (role `ADMIN` / `STAFF`), endpoint pelanggan
-   publik.
-8. **Estimasi waktu tunggu & polling status** — dihitung dari jumlah pesanan aktif di depan +
-   rata-rata waktu proses (dari `store_settings`). Frontend polling status via TanStack Query
-   (`refetchInterval`), bukan WebSocket, sesuai keputusan di technical depth.
-9. **Papan dapur (kitchen board)** — tampilan Kanban 4 kolom (Antre/Diproses/Siap/Selesai), admin/staff
-   drag-and-drop kartu antar kolom (`@dnd-kit/core`) untuk mengubah status. Update dilakukan optimis di
-   UI lalu dikonfirmasi ke server; kalau transisi tidak valid (mis. `READY` → `QUEUED`) server menolak
-   `409` dan kartu otomatis kembali ke kolom asal.
-10. **Laporan otomatis** — produk terlaris, stok rendah, jam tersibuk, tren pendapatan — dihitung dari
-    agregasi SQL, di-cache in-memory dengan TTL pendek dan invalidasi saat ada order/stock baru.
-11. **Pembayaran QRIS via gateway (dummy Midtrans) + sesi otomatis-reset** — lihat bagian
-    [Pembayaran QRIS & Sesi](#pembayaran-qris--sesi-pembayaran) di bawah.
-12. **Data pelanggan wajib** — setiap checkout (QRIS maupun CASH) mewajibkan `customerName` dan
-    `customerPhone`, divalidasi di `CheckoutRequest` (`@NotBlank`, pola nomor telepon).
+1. **Katalog publik** — `GET /api/v1/products` (search, filter kategori, pagination), `GET /api/v1/categories` — tanpa login, di-cache in-memory (Caffeine).
+2. **Checkout dengan concurrency safety** — `POST /api/v1/orders` mengunci baris produk (`SELECT ... FOR UPDATE`, diurutkan per `productId` supaya tidak deadlock), memvalidasi ulang stok di dalam kunci, dan menghitung ulang harga di server (client hanya kirim `productId`/`variantId`/`quantity`).
+3. **Nomor antrean unik per hari** — CASH langsung digenerate saat checkout; QRIS digenerate setelah pembayaran dikonfirmasi. Dijamin `UNIQUE (business_date, queue_number)`.
+4. **Pembayaran QRIS via Midtrans (Sandbox)** — lihat bagian [Pembayaran QRIS](#pembayaran-qris--sesi-pembayaran).
+5. **Sesi QRIS auto-expire** — `PaymentExpiryScheduler` menyapu tiap 60 detik, membatalkan order & mengembalikan stok kalau sesi QRIS tidak dibayar dalam `QRIS_EXPIRY_MINUTES` (default 15 menit). Timestamp expiry dikirim ke frontend sebagai `Instant` (UTC, ISO-8601 dengan `Z`) supaya perhitungan countdown di browser akurat terlepas dari timezone perangkat pengguna.
+6. **Stok sebagai ledger** — setiap perubahan (checkout, adjustment admin, pembatalan, auto-reset QRIS) dicatat di `stock_movements`.
+7. **Papan dapur (Kitchen Board)** — Kanban 4 kolom (Antre/Diproses/Siap/Selesai), staff mengubah status pesanan.
+8. **Laporan otomatis** — produk terlaris, stok rendah, jam tersibuk, pendapatan harian — agregasi SQL, di-cache in-memory.
+9. **RBAC** — lihat tabel [Role & Hak Akses](#role--hak-akses) di atas.
 
 ## Pembayaran QRIS & Sesi Pembayaran
 
-Checkout dengan `paymentMethod: "QRIS"` **tidak langsung** membuat pesanan yang masuk ke papan dapur:
+1. Checkout dengan `paymentMethod: "QRIS"` membuat `Order` berstatus `AWAITING_PAYMENT` + `Payment` berstatus `PENDING`, lalu memanggil Midtrans Core API (`/v2/qris/charge`, Sandbox) lewat `RealMidtransGatewayService`.
+2. Response Midtrans (`transaction_id`, QR image URL, `expiry_time`) disimpan; frontend merender QR (`QrisPaymentModal`) dengan countdown & progress bar, bisa diunduh sebagai PNG.
+3. Setelah pelanggan scan & bayar, Midtrans mengirim webhook ke `POST /api/v1/payments/midtrans/notification` — di titik ini nomor antrean digenerate dan status pindah ke `QUEUED`.
+4. Kalau tidak dibayar dalam batas waktu, `PaymentExpiryScheduler` membatalkan order otomatis dan mengembalikan stok.
 
-1. `POST /api/v1/orders` membuat `Order` dengan status **`AWAITING_PAYMENT`** (nomor antrean masih
-   kosong) + `Payment` berstatus `PENDING`, lalu memanggil `MidtransGatewayService` untuk "charge" QRIS.
-2. Implementasi aktif saat ini, `DummyMidtransGatewayService`, **tidak memanggil api.midtrans.com** —
-   ia mensimulasikan bentuk response Midtrans Core API charge QRIS asli: `transaction_id`, `qr_string`
-   (di sini disebut `qrPayload`, dipakai frontend untuk render QR code), dan `expiry_time` (default 15
-   menit, sama seperti default Midtrans sungguhan). Field-field ini disimpan di `payments`.
-3. Response checkout langsung berisi `qrPayload` + `paymentExpiresAt`, dirender jadi QR code di
-   frontend (`QrisPaymentModal`, bisa diunduh sebagai JPG).
-4. Tombol **"Saya Sudah Bayar"** memanggil `POST /api/v1/orders/{orderNumber}/payments/qris/confirm` —
-   ini mensimulasikan callback/webhook yang di produksi sungguhan datang dari Midtrans. Baru di titik
-   inilah nomor antrean digenerate dan status pindah ke `QUEUED` (masuk papan dapur).
-5. **Sesi otomatis reset kalau tidak dibayar** — `PaymentExpiryScheduler` menyapu tiap 60 detik
-   (`app.qris.expiry-sweep-ms`) mencari `Payment` yang `PENDING` dan sudah lewat `expiresAt`: order
-   dibatalkan (`CANCELLED`), payment ditandai `EXPIRED`, dan stok yang sempat dikurangi saat checkout
-   dikembalikan. Cek yang sama juga jalan "lazy" setiap `GET /api/v1/orders/{orderNumber}` dipanggil,
-   jadi tidak perlu menunggu jadwal sweeper untuk pelanggan yang refresh halaman.
-6. Frontend menyimpan nomor order QRIS yang masih menunggu bayar di `sessionStorage` (tab-scoped) —
-   kalau halaman checkout ter-refresh saat modal QR masih terbuka, sesi otomatis di-resume dari server.
-
-**Untuk pasang Midtrans sungguhan nanti:** buat implementasi baru dari `MidtransGatewayService`
-(package `com.antrigo.backend.payment`) yang memanggil Midtrans Core API dengan `MIDTRANS_SERVER_KEY`
-sungguhan, tandai `@Primary` — kode pemanggilnya (`OrderCheckoutTransactionalService`) tidak perlu
-diubah sama sekali karena bentuk responsnya (`QrisChargeResult`) sudah disamakan dari awal.
-
-## Data Seeder (demo data)
-
-Selain katalog dasar dari Flyway (`V2__seed_data.sql`), ada `DemoDataSeeder` — sebuah
-`CommandLineRunner` Spring Boot yang membangun **~10 hari riwayat transaksi realistis**
-(pesanan, item, pembayaran, audit trail status, dan pergerakan stok) di atas katalog yang sudah
-ada, supaya dashboard, laporan, dan papan dapur langsung terisi data begitu aplikasi pertama
-kali dijalankan — pas untuk demo/presentasi tanpa perlu klik-klik manual dulu.
-
-**Lokasi:** `backend/src/main/java/com/antrigo/backend/seeder/DemoDataSeeder.java`
-
-**Yang di-generate:**
-- Pesanan tersebar di 10 hari terakhir, jam dibobotkan ke jam makan siang (11–14) dan makan
-  malam (17–20) — supaya grafik "Jam Tersibuk" di dashboard terlihat masuk akal, bukan rata.
-- Hari-hari lampau mayoritas `COMPLETED` dengan sedikit `CANCELLED` (~4–6%); hari ini sengaja
-  dicampur `QUEUED` / `PROCESSING` / `READY` / `COMPLETED` supaya papan dapur terlihat "sedang
-  berjalan" saat demo, bukan semuanya sudah selesai.
-- Setiap pesanan tetap melewati aturan bisnis yang sama seperti checkout sungguhan: harga
-  snapshot dari harga produk saat itu, stok dilacak dan tidak pernah dibiarkan minus, transisi
-  status dicatat di `order_status_logs` (dengan aktor staff untuk transisi setelah `QUEUED`),
-  dan pembatalan mencatat `stock_movements` tipe `CANCELLATION_REVERSAL`.
-- Random pakai seed tetap (`new Random(42)`) — hasilnya reproducible, bukan berubah-ubah tiap
-  kali di-generate ulang dari database kosong.
-
-**Yang TIDAK dilakukan seeder ini:** membuat kategori atau produk baru. Ia murni membangun
-riwayat transaksi di atas katalog yang sudah ada dari Flyway — supaya tidak tumpang tindih
-tanggung jawab dengan migration.
-
-### Mengaktifkan / menonaktifkan
-
-Nonaktif secara default (`app.seed.demo-data=false`). **Di `docker-compose.yml` sudah
-diaktifkan secara default** (`SEED_DEMO_DATA=true`) supaya `docker compose up` langsung
-memberi dashboard yang terisi.
-
-```bash
-# Docker: matikan seeding demo data kalau tidak diinginkan
-SEED_DEMO_DATA=false docker compose up --build
-
-# Jalan lokal tanpa Docker, aktifkan sekali:
-mvn spring-boot:run -Dspring-boot.run.profiles=local \
-  -Dspring-boot.run.arguments=--app.seed.demo-data=true
+**Environment variable yang wajib diisi di Railway** (backend):
+```
+MIDTRANS_MERCHANT_ID=<dari Midtrans Dashboard, mode Sandbox>
+MIDTRANS_CLIENT_KEY=SB-Mid-client-...
+MIDTRANS_SERVER_KEY=SB-Mid-server-...
+MIDTRANS_SANDBOX=true
+```
+Payment Notification URL di Midtrans Dashboard diarahkan ke:
+```
+https://antrigo-be.up.railway.app/api/v1/payments/midtrans/notification
 ```
 
-**Idempoten** — seeder mengecek dulu apakah tabel `orders` sudah berisi data; kalau sudah, ia
-langsung berhenti tanpa melakukan apa-apa. Aman dibiarkan `true` permanen di `docker-compose.yml`
-karena hanya benar-benar mengisi data pada boot pertama saat database masih kosong.
+## API Documentation
 
-**Reset data demo** (misalnya mau data "hari ini" yang segar persis di hari presentasi):
-
-```bash
-docker compose down -v   # hapus volume MySQL — database benar-benar kosong lagi
-docker compose up --build
+Swagger UI otomatis dari `springdoc-openapi`, live di:
 ```
-
-
-
-Lihat `postman/README.md`. Ringkasnya:
-
-```bash
-cd postman
-npm install
-npm run test:local     # jalankan collection ke http://localhost:8080
+https://antrigo-be.up.railway.app/swagger-ui.html
 ```
+Spec mentah (OpenAPI 3 JSON): `https://antrigo-be.up.railway.app/v3/api-docs`
 
-Collection mencakup: auth, CRUD produk (admin), alur checkout pelanggan penuh (create → pay →
-polling status), papan dapur admin, validasi 403/409/422, dan skenario stok habis.
+## Postman Collection
 
-## Deploy ke platform gratis
+Import `AntriGo.postman_collection.json` ke Postman. Variable koleksi:
+- `baseUrl` — sudah diarahkan ke production Railway, ganti ke `http://localhost:8080/api/v1` untuk testing lokal
+- `token` — otomatis terisi setelah request **Auth → Login** berhasil (lewat test script)
+- `orderNumber`, `productId`, `categoryId` — ganti sesuai data aktual
 
-`docker-compose.yml` di root cocok untuk dev lokal, tapi platform PaaS gratis (Render, Koyeb,
-Vercel, dll.) **tidak menjalankan file docker-compose secara langsung** — tiap service di-deploy
-terpisah dan disambungkan lewat environment variable, bukan lewat docker network internal.
-Topologinya:
+Struktur folder collection: Auth · Public (Menu, Orders & Payment) · Admin/Staff (Kitchen & Orders) ·
+Admin (Products & Categories, Stock, Reports) — mengikuti pembagian akses role yang sama seperti tabel
+di atas.
+
+## Deploy
 
 | Komponen | Platform | Catatan |
 |---|---|---|
-| Frontend (Vite/React) | Vercel (Hobby) | Deploy langsung dari Git, bukan lewat `frontend/Dockerfile` |
-| Backend (Spring Boot) | Render / Koyeb / Railway (free instance) | Deploy pakai `backend/Dockerfile` yang sudah ada |
-| MySQL | Aiven for MySQL (free tier) | Wajib TLS, auto power-off saat idle lama |
+| Frontend (Vite/React) | Vercel | `VITE_API_BASE_URL` wajib `https://...` lengkap + redeploy setelah env var diubah (Vite bake saat build) |
+| Backend (Spring Boot) | Railway | Deploy dari `backend/Dockerfile`; `CORS_ORIGINS` harus persis domain Vercel |
+| MySQL | Railway MySQL plugin | — |
 
-Cache sekarang in-memory (Caffeine, lihat `CacheConfig.java`), jadi tidak ada lagi komponen
-Redis terpisah yang perlu di-provision — satu service eksternal lebih sedikit untuk di-setup dan
-di-maintain.
+Env var backend penting: `DB_HOST/PORT/NAME/USER/PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`,
+`MIDTRANS_*` (lihat di atas), `QRIS_EXPIRY_MINUTES`, `SPRING_PROFILES_ACTIVE=docker`.
 
-Semua env var produksi yang dibutuhkan ada di `backend/.env.example` (bagian "PRODUKSI") dan
-`frontend/.env.example`. Ringkasnya:
-
-1. **Aiven for MySQL** — buat service MySQL free tier, salin host/port/user/password. Set
-   `DB_SSL_MODE=REQUIRED` (Aiven menolak koneksi tanpa TLS).
-2. **Backend di Render/Koyeb/Railway** — deploy dari `backend/Dockerfile`, isi semua env var (lihat
-   `backend/.env.example`), biarkan `PORT` di-inject otomatis oleh platform.
-3. **Frontend di Vercel** — import repo, set root directory `frontend`, isi
-   `VITE_API_BASE_URL=https://<url-backend-anda>/api/v1` (harus `https://`).
-4. Setelah frontend punya domain (mis. `https://antrigo.vercel.app`), balik ke platform backend dan
-   set `CORS_ORIGINS=https://antrigo.vercel.app` (persis, tanpa trailing slash), lalu redeploy
-   backend supaya CORS berlaku.
-
-**Batasan free tier yang perlu disadari:** backend & MySQL gratis biasanya auto-sleep setelah
-idle beberapa menit — request pertama setelah bangun bisa lambat (~30–60 detik). Ini cukup untuk
-demo/portofolio, tapi bukan untuk beban produksi sungguhan.
+**Batasan free tier:** Railway free instance bisa auto-sleep saat idle lama — request pertama setelah
+bangun bisa lambat.
