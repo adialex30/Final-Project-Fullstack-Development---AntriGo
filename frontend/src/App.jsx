@@ -62,8 +62,53 @@ export default function App() {
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      <Route path="*" element=  {
+          <Navigate to="/" replace />
+      }
+      />
+
+        <Route
+            path="/admin/dashboard"
+            element={
+                <ProtectedRoute roles={['ADMIN', 'STAFF']}>
+                    <DashboardPage />
+                </ProtectedRoute>
+            }
+        />
+        <Route
+            path="/admin/board"
+            element={
+                <ProtectedRoute roles={['STAFF']}>
+                    <KitchenBoardPage />
+                </ProtectedRoute>
+            }
+        />
+        <Route
+            path="/admin/products"
+            element={
+                <ProtectedRoute roles={['ADMIN']}>
+                    <ProductsPage />
+                </ProtectedRoute>
+            }
+        />
+        <Route
+            path="/admin/reports"
+            element={
+                <ProtectedRoute roles={['ADMIN']}>
+                    <ReportsPage />
+                </ProtectedRoute>
+            }
+        />
+        <Route
+            path="/admin/register-staff"
+            element={
+                <ProtectedRoute roles={['ADMIN']}>
+                    <RegisterStaffPage />
+                </ProtectedRoute>
+            }
+        />
+      </Routes>
+
   )
 }
 

@@ -14,7 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/admin/reports")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN','STAFF')")
+@PreAuthorize("hasRole('ADMIN')")
 @Tag(name = "Reports (Admin)", description = "Laporan otomatis: produk terlaris, stok rendah, jam tersibuk, pendapatan")
 public class ReportController {
 
