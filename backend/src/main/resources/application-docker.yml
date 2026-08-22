@@ -21,13 +21,13 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      password: ${REDIS_PASSWORD:}
-      ssl:
-        enabled: ${REDIS_SSL:false}
+#  data:
+#    redis:
+#      host: ${REDIS_HOST}
+#      port: ${REDIS_PORT}
+#      password: ${REDIS_PASSWORD:}
+#      ssl:
+#        enabled: ${REDIS_SSL:false}
 
 server:
   port: ${PORT:8080}

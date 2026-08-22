@@ -52,7 +52,8 @@ export default function MenuPage() {
           >
             Semua
           </button>
-          {categories?.map((c) => (
+          {/*{categories?.map((c) => (*/}
+          {Array.isArray(categories) && categories.map((c) => (
             <button
               key={c.id}
               onClick={() => setCategoryId(c.id)}
@@ -68,7 +69,8 @@ export default function MenuPage() {
         {isLoading && <p className="text-center text-ink-400">Memuat menu...</p>}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {productPage?.content?.map((product) => (
+          {/*{productPage?.content?.map((product) => (*/}
+          {Array.isArray(productPage?.content) && productPage.content.map((product) => (
             <ProductCard key={product.id} product={product} onAdd={handleAdd} />
           ))}
         </div>

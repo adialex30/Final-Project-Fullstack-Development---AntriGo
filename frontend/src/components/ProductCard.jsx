@@ -23,9 +23,12 @@ export default function ProductCard({ product, onAdd }) {
         </span>
       </div>
 
+      {/*{product.variants?.length > 0 && (*/}
+      {/*  <div className="flex flex-wrap gap-2">*/}
+      {/*    {product.variants.map((v) => (*/}
       {product.variants?.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {product.variants.map((v) => (
+          <div className="flex flex-wrap gap-2">
+            {Array.isArray(product.variants) && product.variants.map((v) => (
             <button
               key={v.id}
               onClick={() => setVariantId(v.id)}
