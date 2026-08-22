@@ -6,8 +6,10 @@ import com.antrigo.backend.domain.enums.OrderStatus;
 import com.antrigo.backend.domain.enums.PaymentStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,8 +29,10 @@ public record OrderResponse(
         LocalDateTime createdAt,
         PaymentStatus paymentStatus,
         String qrPayload,
-        LocalDateTime paymentExpiresAt
+        Instant paymentExpiresAt
 ) {
+    private static final ZoneId SERVER_ZONE = ZoneId.of("Asia/Jakarta");
+
     public static OrderResponse from(Order o) {
         return from(o, null);
     }
@@ -45,7 +49,9 @@ public record OrderResponse(
                 o.getCreatedAt(),
                 payment != null ? payment.getStatus() : null,
                 showQr ? payment.getQrPayload() : null,
-                showQr ? payment.getExpiresAt() : null
+                showQr && payment.getExpiresAt() != null
+                        ? payment.getExpiresAt().atZone(SERVER_ZONE).toInstant()
+                        : null
         );
     }
 }
