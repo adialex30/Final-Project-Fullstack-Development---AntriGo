@@ -7,6 +7,7 @@ import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { CartProvider } from './context/CartContext.jsx'
 import './index.css'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,16 +19,18 @@ const queryClient = new QueryClient({
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <CartProvider>
-            <App />
-            <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-          </CartProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+    <React.StrictMode>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <CartProvider>
+                <App />
+                <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
+              </CartProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
+    </React.StrictMode>
 )

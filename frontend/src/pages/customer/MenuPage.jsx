@@ -75,8 +75,8 @@ export default function MenuPage() {
           ))}
         </div>
 
-        {productPage && productPage.content.length === 0 && (
-          <p className="mt-10 text-center text-ink-400">Menu tidak ditemukan.</p>
+        {productPage && Array.isArray(productPage.content) && productPage.content.length === 0 && (
+            <p className="mt-10 text-center text-ink-400">Menu tidak ditemukan.</p>
         )}
       </div>
     </div>
