@@ -10,6 +10,7 @@ import KitchenBoardPage from './pages/admin/KitchenBoardPage'
 import ProductsPage from './pages/admin/ProductsPage'
 import ReportsPage from './pages/admin/ReportsPage'
 import ProtectedRoute from './routes/ProtectedRoute'
+import RegisterStaffPage from './pages/admin/RegisterStaffPage'
 
 export default function App() {
   return (
@@ -28,6 +29,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+        <Route
+            path="/admin/register-staff"
+            element={
+              <ProtectedRoute>
+                  <RegisterStaffPage />
+              </ProtectedRoute>
+        }
+        />
       <Route
         path="/admin/board"
         element={
@@ -57,3 +66,4 @@ export default function App() {
     </Routes>
   )
 }
+

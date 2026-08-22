@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/admin/board', label: 'Papan Dapur' },
   { to: '/admin/products', label: 'Produk & Stok' },
   { to: '/admin/reports', label: 'Laporan' },
+  { to: '/admin/register-staff', label: 'Registrasi Staff' },
 ]
 
 export default function AdminLayout({ children }) {
