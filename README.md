@@ -131,17 +131,3 @@ Import `AntriGo.postman_collection.json` ke Postman. Variable koleksi:
 Struktur folder collection: Auth · Public (Menu, Orders & Payment) · Admin/Staff (Kitchen & Orders) ·
 Admin (Products & Categories, Stock, Reports) — mengikuti pembagian akses role yang sama seperti tabel
 di atas.
-
-## Deploy
-
-| Komponen | Platform | Catatan |
-|---|---|---|
-| Frontend (Vite/React) | Vercel | `VITE_API_BASE_URL` wajib `https://...` lengkap + redeploy setelah env var diubah (Vite bake saat build) |
-| Backend (Spring Boot) | Railway | Deploy dari `backend/Dockerfile`; `CORS_ORIGINS` harus persis domain Vercel |
-| MySQL | Railway MySQL plugin | — |
-
-Env var backend penting: `DB_HOST/PORT/NAME/USER/PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`,
-`MIDTRANS_*` (lihat di atas), `QRIS_EXPIRY_MINUTES`, `SPRING_PROFILES_ACTIVE=docker`.
-
-**Batasan free tier:** Railway free instance bisa auto-sleep saat idle lama — request pertama setelah
-bangun bisa lambat.
